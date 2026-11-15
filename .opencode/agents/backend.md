@@ -1,11 +1,13 @@
 ---
 description: Backend (FastAPI/PostgreSQL/MinIO/worker). Owns backend/**.
 mode: subagent
-model: <tooken/deepseek-v4.1-flash-1017
+model: tooken/deepseek-v4.1-flash-1017
 temperature: 0.1
 steps: 60
 permission:
   task: deny
+  "context7_*": allow
+  "jcodemunch_*": allow
 ---
 You own backend/**. Don't edit other directories. Implement the task from Lead fully and verify it yourself.
 

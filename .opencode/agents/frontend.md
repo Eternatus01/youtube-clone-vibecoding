@@ -6,6 +6,8 @@ temperature: 0.2
 steps: 60
 permission:
   task: deny
+  "context7_*": allow
+  "jcodemunch_*": allow
 ---
 You own frontend/**. Don't edit other directories. Implement the task from Lead fully and verify it yourself.
 
