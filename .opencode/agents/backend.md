@@ -1,7 +1,7 @@
 ---
 description: Backend (FastAPI/PostgreSQL/S3 storage (SeaweedFS)/worker). Owns backend/**.
 mode: subagent
-model: tooken/deepseek-v4.1-flash-1017
+model: tooken/deepseek-v4-pro
 temperature: 0.1
 steps: 60
 permission:

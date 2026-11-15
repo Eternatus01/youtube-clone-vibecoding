@@ -16,19 +16,19 @@ services:
       interval: 5s
       retries: 5
 
-  s3:
-    image: zenko/cloudserver:latest
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.53
+    entrypoint: ['/bin/sh', '/etc/seaweedfs/entrypoint.sh']
     environment:
-      SCALITY_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-      SCALITY_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-change_me_minio}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-admin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-dev_secret_key}
     volumes:
-      - s3_data:/data
-    ports:
-      - '127.0.0.1:8000:8000'
+      - seaweedfs_data:/data
+      - ./docker/seaweedfs/entrypoint.sh:/etc/seaweedfs/entrypoint.sh:ro
     healthcheck:
-      test: ['CMD-SHELL', 'curl -f http://localhost:8000/_/healthcheck || exit 1']
+      test: ['CMD-SHELL', 'nc -z 127.0.0.1 8333 || exit 1']
       interval: 5s
-      retries: 5
+      retries: 10
 
   api:
     build:
@@ -43,7 +43,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      s3:
+      seaweedfs:
         condition: service_healthy
 
   worker:
@@ -55,7 +55,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      s3:
+      seaweedfs:
         condition: service_healthy
 
   nginx:
@@ -66,8 +66,8 @@ services:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - api
-      - s3
+      - seaweedfs
 
 volumes:
   pgdata:
-  s3_data:
+  seaweedfs_data:

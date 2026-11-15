@@ -32,12 +32,12 @@ if [ ! -f .env ]; then
   POSTGRES_PASSWORD="$(gen)"
   JWT_SECRET="$(gen)"
   REFRESH_SECRET="$(gen)"
-  MINIO_ROOT_PASSWORD="$(gen)"
+  S3_SECRET_KEY="$(gen)"
   sed \
     -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${POSTGRES_PASSWORD}|" \
     -e "s|^JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" \
     -e "s|^REFRESH_SECRET=.*|REFRESH_SECRET=${REFRESH_SECRET}|" \
-    -e "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}|" \
+    -e "s|^S3_SECRET_KEY=.*|S3_SECRET_KEY=${S3_SECRET_KEY}|" \
     .env.example > .env
 fi
 

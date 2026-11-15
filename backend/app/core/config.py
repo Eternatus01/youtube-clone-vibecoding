@@ -1,4 +1,3 @@
-from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,11 +7,12 @@ class Settings(BaseSettings):
     # DB
     database_url: str = "postgresql+asyncpg://yt:change_me@db:5432/yt"
 
-    # MinIO
-    minio_endpoint: str = "minio:9000"
-    minio_public_endpoint: str = "minio:9000"
-    minio_bucket: str = "videos"
-    minio_use_ssl: bool = False
+    # S3 Storage (SeaweedFS)
+    s3_endpoint: str = "seaweedfs:8333"
+    s3_access_key: str = "admin"
+    s3_secret_key: str = "dev_secret_key"
+    s3_bucket: str = "videos"
+    s3_region: str = "us-east-1"
 
     # Auth
     jwt_secret: str = "dev_secret"

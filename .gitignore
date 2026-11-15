@@ -8,6 +8,7 @@ venv/
 node_modules/
 dist/
 build/
+*.tsbuildinfo
 .coverage
 htmlcov/
 .pytest_cache/
@@ -16,3 +17,7 @@ htmlcov/
 .DS_Store
 frontend/node_modules/
 frontend/dist/
+frontend/tsconfig.tsbuildinfo
+frontend/tsconfig.node.tsbuildinfo
+frontend/vite.config.d.ts
+frontend/vite.config.js

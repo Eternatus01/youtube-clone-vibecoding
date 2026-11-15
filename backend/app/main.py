@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.core.minio_client import get_s3_client
+from app.core.s3_client import get_s3_client
 from app.routers import (
     admin,
     auth,
@@ -66,9 +66,9 @@ async def startup():
     # Create bucket if missing
     s3 = get_s3_client()
     try:
-        s3.head_bucket(Bucket=settings.minio_bucket)
+        s3.head_bucket(Bucket=settings.s3_bucket)
     except Exception:
-        s3.create_bucket(Bucket=settings.minio_bucket)
+        s3.create_bucket(Bucket=settings.s3_bucket)
 
     # Run migrations
     from alembic import command
