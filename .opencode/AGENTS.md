@@ -1,5 +1,5 @@
 # YouTube clone (test assignment)
-Stack: Python 3.12, FastAPI, SQLAlchemy 2 async, Alembic, PostgreSQL, MinIO, ffmpeg worker (PG queue), Vue 3 + TS + Vite + Pinia + vue-router, docker compose, nginx.
+Stack: Python 3.12, FastAPI, SQLAlchemy 2 async, Alembic, PostgreSQL, S3 storage (SeaweedFS), ffmpeg worker (PG queue), Vue 3 + TS + Vite + Pinia + vue-router, docker compose, nginx.
 Layout: backend/ frontend/ deploy/ docs/ scripts/ install.sh. Lead owns root, deploy/, docs/, git.
 Plan and TZ are for Lead only: backend/frontend must NOT read docs/tz.md or docs/plan.md; they work from Lead's task.
 

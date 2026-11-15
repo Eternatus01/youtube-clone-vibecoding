@@ -1,0 +1,73 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-yt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-yt}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - '127.0.0.1:5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-yt}']
+      interval: 5s
+      retries: 5
+
+  s3:
+    image: zenko/cloudserver:latest
+    environment:
+      SCALITY_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      SCALITY_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-change_me_minio}
+    volumes:
+      - s3_data:/data
+    ports:
+      - '127.0.0.1:8000:8000'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:8000/_/healthcheck || exit 1']
+      interval: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      args:
+        MODE: api
+    env_file: .env
+    volumes:
+      - ./backend:/app:ro
+    ports:
+      - '8000:8000'
+    depends_on:
+      db:
+        condition: service_healthy
+      s3:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      args:
+        MODE: worker
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      s3:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - '${NGINX_PORT:-80}:80'
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+      - s3
+
+volumes:
+  pgdata:
+  s3_data:

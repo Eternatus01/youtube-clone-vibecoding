@@ -27,6 +27,6 @@ Own: architecture, DB schema, Pydantic schemas + route stubs (API contract), doc
 3. Rewrite the "Status" section of docs/plan.md (≤15 lines: works / doesn't work / known issues / next). Edit only that section.
 4. Report to the user in Russian, ≤12 lines: ✅ сделано / ❌ не сделано / ⚠ проблемы / ▶ следующий этап.
 
-Must-have checks you own: private/unlisted/hidden video inaccessible (metadata AND media) to unauthorized users; MinIO port not published; role checks server-side; install.sh works from scratch; /docs works; seed works.
+Must-have checks you own: private/unlisted/hidden video inaccessible (metadata AND media) to unauthorized users; S3 storage (SeaweedFS) port not published; role checks server-side; install.sh works from scratch; /docs works; seed works.
 
 Do not: re-plan agreed work, request extra reviews, loop on verification, run the full test suite without reason, create more agents or docs beyond the plan.

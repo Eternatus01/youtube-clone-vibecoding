@@ -1,0 +1,38 @@
+:root {
+  --bg: #0f0f0f;
+  --bg-elevated: #212121;
+  --text: #f1f1f1;
+  --text-secondary: #aaaaaa;
+  --accent: #ff0033;
+  --accent-hover: #e0002d;
+  --border: #303030;
+  --max-width: 1400px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
