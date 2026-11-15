@@ -53,5 +53,8 @@ DoD: one command on clean Ubuntu → scenario works with seed data.
 FE: YouTube look (spacing, typography, skeletons, responsive, empty/error states). Lead: checklist TZ screens/requirements vs implemented, fix gaps, final README. No new features beyond TZ.
 
 ## Status
-(Lead rewrites after each stage, ≤15 lines)
-- M0: not started
+- M0 ✅: skeleton. Stack up: PostgreSQL, SeaweedFS 4.53 (S3), api, worker, nginx. Migration 0001 (14 tables). /docs + /openapi.json 200. Frontend builds (Vite+TS).
+- Storage: boto3, env-only (S3_ENDPOINT/S3_ACCESS_KEY/S3_SECRET_KEY/S3_BUCKET), presigned PUT+GET via /storage proxy (Range GET 206 proven with real ffmpeg mp4).
+- ⚠ SeaweedFS S3 root returns 403 (no auth) → healthcheck uses `nc -z 8333`. Old CloudServer `s3_data` volume orphaned (blocked by shell; harmless).
+- Endpoints = stubs (raise NotImplementedError). Seed = no-op stub.
+- Next M1: auth (register/login/refresh/JWT cookies) + upload (presigned init/complete) + video CRUD + role middleware.
