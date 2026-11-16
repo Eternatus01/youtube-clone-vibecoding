@@ -245,6 +245,22 @@ class SearchChannelOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ---- Video shares ----
+
+class VideoShareCreate(BaseModel):
+    username: str = Field(min_length=3, max_length=50)
+
+
+class VideoShareOut(BaseModel):
+    id: str
+    video_id: str
+    user_id: str
+    created_at: datetime
+    user: UserOut | None = None
+
+    model_config = {"from_attributes": True}
+
+
 # ---- Reports ----
 
 class ReportCreate(BaseModel):

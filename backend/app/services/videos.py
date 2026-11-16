@@ -31,12 +31,21 @@ def is_admin(user) -> bool:
 def ensure_can_view(video: Video, user) -> None:
     """Enforce visibility rules for a single video or its media."""
     if video.visibility == Visibility.hidden:
+        # Moderation removal: only staff may see it, not even the owner.
         if not is_moderator(user):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
         return
-    if video.visibility != Visibility.public:
-        if user is None or (video.owner_id != user.id and not is_moderator(user)):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    if video.visibility in (Visibility.public, Visibility.unlisted):
+        return
+    # Private: owner, explicitly shared users, moderators and admins only.
+    if user is not None:
+        if video.owner_id == user.id or is_moderator(user):
+            return
+        # `shares` is eagerly loaded by the repository; never lazy-load here.
+        shares = video.__dict__.get("shares") or []
+        if any(share.user_id == user.id for share in shares):
+            return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
 
 def ensure_can_edit(video: Video, user) -> None:
@@ -90,6 +99,28 @@ async def list_feed(
     page_size = min(max(page_size, 1), 100)
     videos, total = await videos_repo.get_feed(
         db, search=search, offset=(page - 1) * page_size, limit=page_size
+    )
+    items = await serialize_videos(db, videos, user)
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=math.ceil(total / page_size) if total else 0,
+    )
+
+
+async def list_mine(
+    db: AsyncSession,
+    *,
+    page: int,
+    page_size: int,
+    user,
+) -> PaginatedResponse:
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 100)
+    videos, total = await videos_repo.list_owned(
+        db, user.id, offset=(page - 1) * page_size, limit=page_size
     )
     items = await serialize_videos(db, videos, user)
     return PaginatedResponse(

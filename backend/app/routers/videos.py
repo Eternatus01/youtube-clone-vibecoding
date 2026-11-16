@@ -8,9 +8,12 @@ from app.schemas.schemas import (
     LikeInfo,
     PaginatedResponse,
     VideoOut,
+    VideoShareCreate,
+    VideoShareOut,
     VideoUpdate,
 )
 from app.services import likes as likes_service
+from app.services import shares as shares_service
 from app.services import videos as videos_service
 
 router = APIRouter(prefix="/api/videos", tags=["videos"])
@@ -26,6 +29,18 @@ async def list_videos(
 ):
     return await videos_service.list_feed(
         db, page=page, page_size=page_size, search=search, user=current_user
+    )
+
+
+@router.get("/mine", response_model=PaginatedResponse)
+async def my_videos(
+    page: int = 1,
+    page_size: int = 20,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await videos_service.list_mine(
+        db, page=page, page_size=page_size, user=current_user
     )
 
 
@@ -59,6 +74,38 @@ async def delete_video(
 ):
     video = await videos_service.get_video(db, video_id, current_user)
     await videos_service.delete_video(db, video, current_user)
+
+
+@router.get("/{video_id}/shares", response_model=list[VideoShareOut])
+async def list_shares(
+    video_id: str,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    video = await videos_service.get_video(db, video_id, current_user)
+    return await shares_service.list_shares(db, video, current_user)
+
+
+@router.post("/{video_id}/shares", response_model=VideoShareOut, status_code=status.HTTP_201_CREATED)
+async def add_share(
+    video_id: str,
+    body: VideoShareCreate,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    video = await videos_service.get_video(db, video_id, current_user)
+    return await shares_service.add_share(db, video, body, current_user)
+
+
+@router.delete("/{video_id}/shares/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_share(
+    video_id: str,
+    user_id: str,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    video = await videos_service.get_video(db, video_id, current_user)
+    await shares_service.remove_share(db, video, user_id, current_user)
 
 
 def _iter_body(body, chunk_size: int = 64 * 1024):

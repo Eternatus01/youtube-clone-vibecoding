@@ -7,7 +7,9 @@ from app.models.models import Comment, Like, Video, VideoStatus, Visibility
 
 async def get(db: AsyncSession, video_id: str) -> Video | None:
     result = await db.execute(
-        select(Video).options(selectinload(Video.owner)).where(Video.id == video_id)
+        select(Video)
+        .options(selectinload(Video.owner), selectinload(Video.shares))
+        .where(Video.id == video_id)
     )
     return result.scalar_one_or_none()
 
@@ -133,6 +135,27 @@ async def list_related(
         .options(selectinload(Video.owner))
         .where(*conditions)
         .order_by(same_owner_first, Video.created_at.desc(), Video.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(result.scalars().all()), int(total or 0)
+
+
+async def list_owned(
+    db: AsyncSession,
+    owner_id: str,
+    *,
+    offset: int,
+    limit: int,
+) -> tuple[list[Video], int]:
+    """All videos of an owner regardless of visibility or processing status."""
+    conditions = [Video.owner_id == owner_id]
+    total = await db.scalar(select(func.count(Video.id)).where(*conditions))
+    result = await db.execute(
+        select(Video)
+        .options(selectinload(Video.owner), selectinload(Video.shares))
+        .where(*conditions)
+        .order_by(Video.created_at.desc(), Video.id.desc())
         .offset(offset)
         .limit(limit)
     )

@@ -325,6 +325,9 @@ class Report(Base, TimestampMixin):
         String(20), default="open", nullable=False
     )  # open/resolved/dismissed
 
+    video: Mapped["Video"] = relationship()
+    reporter: Mapped["User"] = relationship()
+
     __table_args__ = (
         UniqueConstraint("video_id", "reporter_id", name="uq_report"),
     )
@@ -344,3 +347,6 @@ class ModerationAction(Base, TimestampMixin):
     )
     action: Mapped[str] = mapped_column(String(20), nullable=False)  # hide/restore/delete
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    video: Mapped["Video"] = relationship()
+    moderator: Mapped["User"] = relationship()
