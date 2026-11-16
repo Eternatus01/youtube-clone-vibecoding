@@ -12,10 +12,12 @@ from app.routers import (
     auth,
     channels,
     comments,
+    history,
     moderation,
     playlists,
     reports,
     search,
+    subscriptions,
     uploads,
     videos,
 )
@@ -49,6 +51,8 @@ def create_app() -> FastAPI:
         reports.router,
         moderation.router,
         admin.router,
+        history.router,
+        subscriptions.router,
     ):
         app.include_router(r)
 

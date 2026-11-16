@@ -9,6 +9,15 @@ from app.services import channels as channels_service
 router = APIRouter(prefix="/api/channels", tags=["channels"])
 
 
+@router.get("/me", response_model=ChannelOut)
+async def get_my_channel(
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Resolve the authenticated user's own channel."""
+    return await channels_service.get_channel(db, current_user.id, current_user)
+
+
 @router.get("/{channel_id}", response_model=ChannelOut)
 async def get_channel(
     channel_id: str,

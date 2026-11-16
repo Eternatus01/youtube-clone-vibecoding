@@ -321,3 +321,19 @@ class PaginatedResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+# ---- Watch History ----
+
+class WatchHistoryOut(BaseModel):
+    id: str
+    video_id: str
+    progress_seconds: int | None = None
+    last_watched_at: datetime
+    video: "VideoOut | None" = None
+
+    model_config = {"from_attributes": True}
+
+
+class HistoryRecordRequest(BaseModel):
+    progress_seconds: int | None = None

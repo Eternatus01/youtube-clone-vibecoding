@@ -81,6 +81,9 @@ class User(Base, TimestampMixin):
     subscriptions: Mapped[list["Subscription"]] = relationship(
         back_populates="subscriber", foreign_keys="Subscription.subscriber_id"
     )
+    watch_history: Mapped[list["WatchHistory"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Video(Base, TimestampMixin):
@@ -113,6 +116,9 @@ class Video(Base, TimestampMixin):
         back_populates="video", cascade="all, delete-orphan"
     )
     shares: Mapped[list["VideoShare"]] = relationship(
+        back_populates="video", cascade="all, delete-orphan"
+    )
+    watch_history: Mapped[list["WatchHistory"]] = relationship(
         back_populates="video", cascade="all, delete-orphan"
     )
 
@@ -261,6 +267,31 @@ class Subscription(Base, TimestampMixin):
 
     __table_args__ = (
         UniqueConstraint("subscriber_id", "channel_id", name="uq_subscription"),
+    )
+
+
+class WatchHistory(Base):
+    __tablename__ = "watch_history"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=gen_uuid
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    video_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("videos.id", ondelete="CASCADE"), nullable=False
+    )
+    progress_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_watched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="watch_history")
+    video: Mapped["Video"] = relationship(back_populates="watch_history")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "video_id", name="uq_watch_history"),
     )
 
 

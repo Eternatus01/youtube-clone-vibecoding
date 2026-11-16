@@ -148,6 +148,11 @@ async def register_view(db: AsyncSession, video: Video, user) -> None:
     # increment_views commits, expiring `video`; re-read the committed row so
     # the serialized views value is exact (no double-count).
     await db.refresh(video)
+    if user is not None:
+        # Keep watch history in step with views; upsert keeps it idempotent.
+        from app.repositories import history as history_repo
+
+        await history_repo.upsert_history(db, user.id, video.id, None)
 
 
 async def list_related(
