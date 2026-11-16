@@ -158,6 +158,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/videos/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Videos */
+        get: operations["my_videos_api_videos_mine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/videos/{video_id}": {
         parameters: {
             query?: never;
@@ -175,6 +192,41 @@ export interface paths {
         head?: never;
         /** Update Video */
         patch: operations["update_video_api_videos__video_id__patch"];
+        trace?: never;
+    };
+    "/api/videos/{video_id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Shares */
+        get: operations["list_shares_api_videos__video_id__shares_get"];
+        put?: never;
+        /** Add Share */
+        post: operations["add_share_api_videos__video_id__shares_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/videos/{video_id}/shares/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Share */
+        delete: operations["remove_share_api_videos__video_id__shares__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/videos/{video_id}/stream": {
@@ -649,6 +701,32 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** ChannelOut */
+        ChannelOut: {
+            /** Id */
+            id: string;
+            /** Username */
+            username: string;
+            /** Avatar Url */
+            avatar_url?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Subscriber Count
+             * @default 0
+             */
+            subscriber_count: number;
+            /**
+             * Video Count
+             * @default 0
+             */
+            video_count: number;
+            /** Is Subscribed */
+            is_subscribed?: boolean | null;
+        };
         /** CommentCreate */
         CommentCreate: {
             /** Body */
@@ -937,24 +1015,6 @@ export interface components {
             owner?: components["schemas"]["UserOut"] | null;
         };
         /** SubscriptionOut */
-        /** ChannelOut */
-        ChannelOut: {
-            /** Id */
-            id: string;
-            /** Username */
-            username: string;
-            avatar_url?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Subscriber Count */
-            subscriber_count: number;
-            /** Video Count */
-            video_count: number;
-            is_subscribed?: boolean | null;
-        };
         SubscriptionOut: {
             /** Id */
             id: string;
@@ -1082,6 +1142,26 @@ export interface components {
              * @default []
              */
             in_playlists: components["schemas"]["PlaylistRef"][];
+        };
+        /** VideoShareCreate */
+        VideoShareCreate: {
+            /** Username */
+            username: string;
+        };
+        /** VideoShareOut */
+        VideoShareOut: {
+            /** Id */
+            id: string;
+            /** Video Id */
+            video_id: string;
+            /** User Id */
+            user_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            user?: components["schemas"]["UserOut"] | null;
         };
         /** VideoUpdate */
         VideoUpdate: {
@@ -1422,6 +1502,38 @@ export interface operations {
             };
         };
     };
+    my_videos_api_videos_mine_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_video_api_videos__video_id__get: {
         parameters: {
             query?: never;
@@ -1505,6 +1617,102 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["VideoOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_shares_api_videos__video_id__shares_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoShareOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_share_api_videos__video_id__shares_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VideoShareCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoShareOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_share_api_videos__video_id__shares__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -1643,12 +1851,11 @@ export interface operations {
             };
         };
     };
-    list_comments_api_videos__video_id__comments__get: {
+    related_videos_api_videos__video_id__related_get: {
         parameters: {
             query?: {
                 page?: number;
                 page_size?: number;
-                sort?: string;
             };
             header?: never;
             path: {
@@ -1678,11 +1885,12 @@ export interface operations {
             };
         };
     };
-    related_videos_api_videos__video_id__related_get: {
+    list_comments_api_videos__video_id__comments__get: {
         parameters: {
             query?: {
                 page?: number;
                 page_size?: number;
+                sort?: string;
             };
             header?: never;
             path: {
@@ -2313,7 +2521,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ReportOut"][];
                 };
             };
         };

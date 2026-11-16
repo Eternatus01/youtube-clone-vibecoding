@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, computed, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 
@@ -76,6 +76,14 @@ async function logout() {
   await auth.logout()
   router.push({ name: 'home' })
 }
+
+function closeMenu() {
+  menuOpen.value = false
+}
+
+// Role-based link visibility (UX only; the server enforces real authorization).
+const canModerate = computed(() => auth.user?.role === 'moderator' || auth.user?.role === 'admin')
+const isAdmin = computed(() => auth.user?.role === 'admin')
 
 onMounted(() => document.addEventListener('click', onDocumentClick))
 onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
@@ -172,6 +180,24 @@ const initials = () =>
               <div class="menu-username">{{ auth.user?.username }}</div>
               <div class="menu-email">{{ auth.user?.email }}</div>
             </div>
+            <RouterLink to="/my-videos" class="menu-item" @click="closeMenu">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zm5 3v6l5-3-5-3z" />
+              </svg>
+              Your videos
+            </RouterLink>
+            <RouterLink v-if="canModerate" to="/moderation" class="menu-item" @click="closeMenu">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2l8 4v6c0 5-3.4 9.4-8 10-4.6-.6-8-5-8-10V6l8-4zm-1 12l6-6-1.4-1.4L11 11.2 8.4 8.6 7 10l4 4z" />
+              </svg>
+              Moderation
+            </RouterLink>
+            <RouterLink v-if="isAdmin" to="/admin" class="menu-item" @click="closeMenu">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 1l3 5 6 1-4 5 1 6-6-3-6 3 1-6-4-5 6-1 3-5z" />
+              </svg>
+              Admin
+            </RouterLink>
             <button class="menu-item" @click="logout">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M10 3h4a2 2 0 0 1 2 2v3h-2V5h-4v14h4v-3h2v3a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm9 6 4 3-4 3v-2h-6v-2h6V9z" />
@@ -202,6 +228,17 @@ const initials = () =>
             <path d="M13 3a9 9 0 1 0 8.94 10h-2.02A7 7 0 1 1 13 5c1.93 0 3.68.79 4.95 2.05L15 10h7V3l-2.65 2.65A8.96 8.96 0 0 0 13 3zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8H12z" />
           </svg>
           <span class="side-label">History</span>
+        </RouterLink>
+        <RouterLink
+          v-if="auth.isAuthenticated"
+          to="/my-videos"
+          class="side-link"
+          :class="{ active: route.name === 'my-videos' }"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zm5 3v6l5-3-5-3z" />
+          </svg>
+          <span class="side-label">Your videos</span>
         </RouterLink>
         <RouterLink to="/upload" class="side-link" :class="{ active: route.name === 'upload' }">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">

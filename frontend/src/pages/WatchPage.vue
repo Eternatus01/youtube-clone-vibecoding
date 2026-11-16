@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api } from '../api/client'
+import { api, extractError } from '../api/client'
 import type { components } from '../api/schema'
 import { useAuthStore } from '../stores/auth'
 import VideoCard from '../components/VideoCard.vue'
@@ -44,6 +44,36 @@ const isOwner = computed(
 const canSubscribe = computed(
   () => !!auth.user && !!channel.value && !isOwner.value,
 )
+
+// ---- Report (owner never sees the button) ----
+const reportOpen = ref(false)
+const reportDone = ref(false)
+const reportReason = ref('')
+const reportSending = ref(false)
+const reportError = ref('')
+
+function cancelReport() {
+  reportOpen.value = false
+  reportReason.value = ''
+  reportError.value = ''
+}
+
+async function submitReport() {
+  if (!video.value || !reportReason.value.trim() || reportSending.value) return
+  reportSending.value = true
+  reportError.value = ''
+  const { error: apiError } = await api.POST('/api/reports/', {
+    body: { video_id: video.value.id, reason: reportReason.value.trim() },
+  })
+  reportSending.value = false
+  if (apiError) {
+    reportError.value = extractError(apiError, 'Failed to send report')
+    return
+  }
+  reportOpen.value = false
+  reportDone.value = true
+  reportReason.value = ''
+}
 
 async function load() {
   loading.value = true
@@ -374,6 +404,40 @@ watch(
                 {{ dislikeCount }}
               </button>
             </div>
+
+            <!-- Report (hidden from the video owner) -->
+            <div v-if="auth.user && !isOwner" class="report-area">
+              <button
+                v-if="!reportOpen && !reportDone"
+                class="btn"
+                title="Report this video"
+                @click="reportOpen = true"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z" />
+                </svg>
+                Report
+              </button>
+              <form v-if="reportOpen" class="report-form" @submit.prevent="submitReport">
+                <textarea
+                  v-model="reportReason"
+                  rows="2"
+                  placeholder="Why are you reporting this video?"
+                ></textarea>
+                <div class="report-actions">
+                  <button
+                    class="btn btn-primary"
+                    type="submit"
+                    :disabled="reportSending || !reportReason.trim()"
+                  >
+                    {{ reportSending ? 'Sending…' : 'Send report' }}
+                  </button>
+                  <button class="btn" type="button" @click="cancelReport">Cancel</button>
+                </div>
+                <p v-if="reportError" class="report-error">{{ reportError }}</p>
+              </form>
+              <p v-if="reportDone" class="report-done">Report sent. Thank you.</p>
+            </div>
           </div>
 
           <div v-if="video.description" class="description">{{ video.description }}</div>
@@ -544,6 +608,49 @@ watch(
   gap: 12px;
   margin-top: 12px;
   flex-wrap: wrap;
+}
+
+/* ---- Report ---- */
+.report-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.report-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 220px;
+}
+
+.report-form textarea {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.report-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.report-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.report-done {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .owner {
