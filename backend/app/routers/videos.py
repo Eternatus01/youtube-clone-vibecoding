@@ -166,11 +166,15 @@ async def get_poster(
     video = await videos_service.get_video(db, video_id, current_user)
     if video.custom_poster_url:
         obj = await videos_service.open_media(video.custom_poster_url, None)
-        return _media_response(obj, "image/jpeg")
-    assets = await videos_service.get_assets(db, video.id)
-    asset = videos_service.choose_poster_asset(assets)
-    obj = await videos_service.open_media(asset.object_key, None)
-    return _media_response(obj, "image/jpeg")
+        response = _media_response(obj, "image/jpeg")
+    else:
+        assets = await videos_service.get_assets(db, video.id)
+        asset = videos_service.choose_poster_asset(assets)
+        obj = await videos_service.open_media(asset.object_key, None)
+        response = _media_response(obj, "image/jpeg")
+    # Custom posters can be replaced under the same URL: revalidate every time.
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @router.post("/{video_id}/like", response_model=LikeInfo)

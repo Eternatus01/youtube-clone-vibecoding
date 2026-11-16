@@ -412,7 +412,7 @@ watch(
             class="player"
             controls
             preload="metadata"
-            :poster="`/api/videos/${video.id}/poster`"
+            :poster="`/api/videos/${video.id}/poster?v=${encodeURIComponent(video.custom_poster_url || '')}`"
           >
             <source :src="`/api/videos/${video.id}/stream`" type="video/mp4" />
             Ваш браузер не поддерживает воспроизведение видео.
@@ -428,7 +428,13 @@ watch(
               class="owner"
             >
               <span class="avatar avatar-40">
-                {{ (video.owner.username || '?').charAt(0).toUpperCase() }}
+                <img
+                  v-if="video.owner.avatar_url"
+                  class="avatar-img"
+                  :src="video.owner.avatar_url"
+                  alt=""
+                />
+                <template v-else>{{ (video.owner.username || '?').charAt(0).toUpperCase() }}</template>
               </span>
               <span class="owner-text">
                 <span class="owner-name">{{ video.owner.username }}</span>
@@ -522,7 +528,13 @@ watch(
 
             <div v-if="auth.user" class="comment-form">
               <span class="avatar avatar-40">
-                {{ (auth.user.username || '?').charAt(0).toUpperCase() }}
+                <img
+                  v-if="auth.user.avatar_url"
+                  class="avatar-img"
+                  :src="auth.user.avatar_url"
+                  alt=""
+                />
+                <template v-else>{{ (auth.user.username || '?').charAt(0).toUpperCase() }}</template>
               </span>
               <div class="comment-form-body">
                 <textarea
@@ -566,7 +578,13 @@ watch(
                   :to="{ name: 'channel', params: { id: c.author.id } }"
                 >
                   <span class="avatar avatar-40">
-                    {{ (c.author.username || '?').charAt(0).toUpperCase() }}
+                    <img
+                      v-if="c.author.avatar_url"
+                      class="avatar-img"
+                      :src="c.author.avatar_url"
+                      alt=""
+                    />
+                    <template v-else>{{ (c.author.username || '?').charAt(0).toUpperCase() }}</template>
                   </span>
                 </RouterLink>
                 <span v-else class="avatar avatar-40">?</span>
@@ -619,7 +637,7 @@ watch(
             <span class="related-thumb-wrap">
               <img
                 class="related-thumb"
-                :src="`/api/videos/${v.id}/poster`"
+                :src="`/api/videos/${v.id}/poster?v=${encodeURIComponent(v.custom_poster_url || '')}`"
                 alt=""
                 loading="lazy"
               />
@@ -718,6 +736,14 @@ watch(
   flex-shrink: 0;
   user-select: none;
   text-decoration: none;
+  overflow: hidden;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .avatar-40 {

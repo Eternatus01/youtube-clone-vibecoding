@@ -9,12 +9,21 @@ type VideoCardVideo = {
   views: number
   duration_seconds?: number | null
   created_at: string
-  owner?: { username?: string } | null
+  custom_poster_url?: string | null
+  owner?: { username?: string; avatar_url?: string | null } | null
 }
 
 const props = defineProps<{ video: VideoCardVideo }>()
 
 const posterFailed = ref(false)
+const avatarFailed = ref(false)
+
+const posterSrc = computed(() => {
+  const version = encodeURIComponent(props.video.custom_poster_url || '')
+  return `/api/videos/${props.video.id}/poster?v=${version}`
+})
+const avatarUrl = computed(() => props.video.owner?.avatar_url ?? '')
+const showAvatarImg = computed(() => !!avatarUrl.value && !avatarFailed.value)
 
 const duration = () => formatDuration(props.video.duration_seconds)
 const views = () => (props.video.views != null ? formatViews(props.video.views) : null)
@@ -30,7 +39,7 @@ const meta = computed(() => [views(), age()].filter(Boolean).join(' • '))
     <div class="thumb">
       <img
         v-if="!posterFailed"
-        :src="`/api/videos/${video.id}/poster`"
+        :src="posterSrc"
         :alt="video.title"
         loading="lazy"
         @error="posterFailed = true"
@@ -43,7 +52,16 @@ const meta = computed(() => [views(), age()].filter(Boolean).join(' • '))
       <span v-if="duration()" class="duration">{{ duration() }}</span>
     </div>
     <div class="info">
-      <div v-if="initial" class="avatar" aria-hidden="true">{{ initial }}</div>
+      <div v-if="showAvatarImg" class="avatar" aria-hidden="true">
+        <img
+          class="avatar-img"
+          :src="avatarUrl"
+          alt=""
+          loading="lazy"
+          @error="avatarFailed = true"
+        />
+      </div>
+      <div v-else-if="initial" class="avatar" aria-hidden="true">{{ initial }}</div>
       <div class="text">
         <div class="title" :title="video.title">{{ video.title }}</div>
         <RouterLink
@@ -123,6 +141,14 @@ const meta = computed(() => [views(), age()].filter(Boolean).join(' • '))
   font-weight: 500;
   flex-shrink: 0;
   user-select: none;
+  overflow: hidden;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .text {

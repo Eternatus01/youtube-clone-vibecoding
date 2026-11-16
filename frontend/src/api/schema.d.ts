@@ -1323,6 +1323,8 @@ export interface components {
              * @default []
              */
             tags: string[];
+            /** Custom Poster Url */
+            custom_poster_url?: string | null;
         };
         /** VideoShareCreate */
         VideoShareCreate: {

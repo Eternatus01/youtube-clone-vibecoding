@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Pencil, Trash2, VideoOff } from 'lucide-vue-next'
+import { Pencil, Trash2, Upload, VideoOff } from 'lucide-vue-next'
 import { api, extractError } from '../api/client'
 import type { components } from '../api/schema'
 import { useToast } from '../composables/useToast'
@@ -25,6 +25,8 @@ interface VideoRow extends VideoOut {
   shareUsername: string
   shareError: string
   shareBusy: boolean
+  posterVersion: number
+  posterBusy: boolean
 }
 
 const videos = ref<VideoRow[]>([])
@@ -54,6 +56,8 @@ function toRow(v: VideoOut): VideoRow {
     shareUsername: '',
     shareError: '',
     shareBusy: false,
+    posterVersion: 0,
+    posterBusy: false,
   }
 }
 
@@ -90,6 +94,50 @@ function startEdit(v: VideoRow) {
   v.editing = true
   error.value = ''
   loadShares(v)
+}
+
+// ---- Poster (custom thumbnail) ----
+
+function posterSrc(v: VideoRow): string {
+  return `/api/videos/${v.id}/poster?v=${v.posterVersion}`
+}
+
+async function uploadPoster(v: VideoRow, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] ?? null
+  input.value = ''
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    toast.push('Выберите файл изображения.')
+    return
+  }
+  v.posterBusy = true
+  try {
+    const body = new FormData()
+    body.append('poster', file)
+    const res = await fetch(`/api/uploads/${v.id}/poster`, {
+      method: 'POST',
+      credentials: 'include',
+      body,
+    })
+    if (!res.ok) {
+      let detail = 'Не удалось загрузить превью'
+      try {
+        const payload = (await res.json()) as { detail?: unknown }
+        if (typeof payload?.detail === 'string') detail = payload.detail
+      } catch {
+        // ignore non-JSON
+      }
+      throw new Error(detail)
+    }
+    v.posterVersion += 1
+    posterFailed.value[v.id] = false
+    toast.push('Превью обновлено')
+  } catch (e) {
+    toast.push(e instanceof Error ? e.message : 'Ошибка загрузки превью')
+  } finally {
+    v.posterBusy = false
+  }
 }
 
 // ---- Shares (owner-only, private videos) ----
@@ -242,7 +290,7 @@ onMounted(load)
             <div class="thumb">
               <img
                 v-if="!posterFailed[v.id]"
-                :src="`/api/videos/${v.id}/poster`"
+                :src="posterSrc(v)"
                 alt=""
                 loading="lazy"
                 @error="posterFailed[v.id] = true"
@@ -298,6 +346,31 @@ onMounted(load)
               <option value="unlisted">По ссылке</option>
             </select>
           </label>
+
+          <div class="field">
+            <span>Обложка (превью)</span>
+            <div class="poster-edit">
+              <div class="poster-preview">
+                <img
+                  v-if="!posterFailed[v.id]"
+                  :src="posterSrc(v)"
+                  alt=""
+                  @error="posterFailed[v.id] = true"
+                />
+              </div>
+              <label class="btn btn-ghost poster-pick" :class="{ busy: v.posterBusy }">
+                <Upload class="lucide-icon" :size="16" />
+                {{ v.posterBusy ? 'Загрузка…' : 'Выбрать превью' }}
+                <input
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  :disabled="v.posterBusy"
+                  @change="uploadPoster(v, $event)"
+                />
+              </label>
+            </div>
+          </div>
 
           <!-- Shares section -->
           <div class="shares">
@@ -508,6 +581,39 @@ onMounted(load)
 .edit-actions {
   display: flex;
   gap: 8px;
+}
+
+/* ---- Poster edit ---- */
+.poster-edit {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.poster-preview {
+  width: 160px;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.poster-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.poster-pick {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.poster-pick.busy {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 /* ---- Shares ---- */

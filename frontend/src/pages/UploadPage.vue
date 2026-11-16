@@ -32,6 +32,47 @@ let pollTimer: number | null = null
 
 const fileInput = ref<HTMLInputElement | null>(null)
 
+// Optional custom poster (thumbnail). Uploaded after the video record exists.
+const posterFile = ref<File | null>(null)
+const posterInput = ref<HTMLInputElement | null>(null)
+const posterPreview = ref('')
+
+function pickPoster() {
+  posterInput.value?.click()
+}
+
+function onPosterChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const selected = input.files?.[0] ?? null
+  input.value = ''
+  if (!selected) return
+  if (!selected.type.startsWith('image/')) {
+    errorMessage.value = 'Превью должно быть изображением.'
+    return
+  }
+  if (posterPreview.value) URL.revokeObjectURL(posterPreview.value)
+  posterFile.value = selected
+  posterPreview.value = URL.createObjectURL(selected)
+}
+
+function clearPoster() {
+  if (posterPreview.value) URL.revokeObjectURL(posterPreview.value)
+  posterFile.value = null
+  posterPreview.value = ''
+}
+
+async function uploadPoster(videoId: string): Promise<void> {
+  if (!posterFile.value) return
+  const body = new FormData()
+  body.append('poster', posterFile.value)
+  const res = await fetch(`/api/uploads/${videoId}/poster`, {
+    method: 'POST',
+    credentials: 'include',
+    body,
+  })
+  if (!res.ok) throw new Error('Не удалось загрузить превью')
+}
+
 const canSubmit = computed(
   () => file.value !== null && title.value.trim().length > 0 && phase.value === 'form',
 )
@@ -92,6 +133,7 @@ function reset() {
   readyVideoId.value = ''
   tags.value = []
   tagsInput.value = ''
+  clearPoster()
 }
 
 /** Commit the current input into the tags list. */
@@ -133,6 +175,15 @@ async function startUpload() {
     await putFile(upload_url, file.value, (pct) => {
       progress.value = pct
     })
+
+    // 2b. Optional custom poster. A failure must not block the video upload.
+    if (posterFile.value) {
+      try {
+        await uploadPoster(video_id)
+      } catch {
+        toast.push('Видео загружено, но превью не удалось загрузить')
+      }
+    }
 
     // 3. Complete: backend enqueues transcoding.
     const done = await api.POST('/api/uploads/complete', {
@@ -293,6 +344,36 @@ onBeforeUnmount(stopPolling)
               <option value="private">Приватное</option>
               <option value="unlisted">По ссылке</option>
             </select>
+          </div>
+
+          <div class="field">
+            <label for="poster">Обложка (превью)</label>
+            <div class="poster-picker">
+              <div class="poster-preview" :class="{ empty: !posterPreview }">
+                <img v-if="posterPreview" :src="posterPreview" alt="Превью" />
+                <span v-else>16:9</span>
+              </div>
+              <div class="poster-actions">
+                <button class="btn" type="button" @click="pickPoster">Выбрать превью</button>
+                <button
+                  v-if="posterPreview"
+                  class="btn btn-ghost"
+                  type="button"
+                  @click="clearPoster"
+                >
+                  Убрать
+                </button>
+                <span class="poster-hint">Необязательно. JPG/PNG/WEBP.</span>
+              </div>
+              <input
+                id="poster"
+                ref="posterInput"
+                type="file"
+                accept="image/*"
+                hidden
+                @change="onPosterChange"
+              />
+            </div>
           </div>
 
           <p v-if="errorMessage" class="inline-error">{{ errorMessage }}</p>
@@ -494,6 +575,47 @@ onBeforeUnmount(stopPolling)
 
 .tag-remove:hover {
   color: var(--danger);
+}
+
+/* ---- Poster picker ---- */
+.poster-picker {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.poster-preview {
+  width: 160px;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.poster-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.poster-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.poster-hint {
+  font-size: 12px;
+  color: var(--text-2);
 }
 
 /* ---- Progress / status ---- */
