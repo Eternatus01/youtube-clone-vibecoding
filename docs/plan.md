@@ -54,7 +54,10 @@ FE: YouTube look (spacing, typography, skeletons, responsive, empty/error states
 
 ## Status
 - M0 ✅: skeleton. Stack up: PostgreSQL, SeaweedFS 4.53 (S3), api, worker, nginx. Migration 0001 (14 tables). /docs + /openapi.json 200. Frontend builds (Vite+TS).
-- Storage: boto3, env-only (S3_ENDPOINT/S3_ACCESS_KEY/S3_SECRET_KEY/S3_BUCKET), presigned PUT+GET via /storage proxy (Range GET 206 proven with real ffmpeg mp4).
-- ⚠ SeaweedFS S3 root returns 403 (no auth) → healthcheck uses `nc -z 8333`. Old CloudServer `s3_data` volume orphaned (blocked by shell; harmless).
-- Endpoints = stubs (raise NotImplementedError). Seed = no-op stub.
-- Next M1: auth (register/login/refresh/JWT cookies) + upload (presigned init/complete) + video CRUD + role middleware.
+- M1 ✅: auth (register/login/refresh/logout/me/change-password, JWT httpOnly cookies, rate limit), upload (presigned init→complete→transcode job), worker (ffprobe validate, ≤720p H.264 faststart + poster, retries ≤3), videos feed + get/stream/poster with visibility authz (private/unlisted 403, hidden 404 except mod/admin), owner/mod/admin role checks server-side. Layered routers→services→repositories. Tests 22 (auth/upload/video/worker, yt_test + fake S3).
+- FE: top bar + collapsible sidebar + dark/light theme, login/register, auth store + guards, home feed grid, upload page (presigned PUT + progress + polling).
+- ✅ Verified E2E: register→init→PUT→complete→ready(2s)→feed; private video 403 meta/stream/poster to others, 200 to owner; /docs + /openapi.json (34 paths) 200; S3 port 8333 not published.
+- ⚠ SeaweedFS S3 root returns 403 (no auth) → healthcheck uses `nc -z 8333`. Old CloudServer `s3_data` volume orphaned (harmless).
+- ⚠ Worker image has no bind mount (prod build) — rebuild after backend changes: `docker compose build worker && docker compose up -d worker`.
+- Not done (M2+): like/unlike, comments, subscriptions, channel, playlists, search, moderation, admin, seed (still no-op stub).
+- Next M2: watch page, interactions, channel, search, recommendations.
