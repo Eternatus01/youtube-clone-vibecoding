@@ -54,10 +54,10 @@ FE: YouTube look (spacing, typography, skeletons, responsive, empty/error states
 
 ## Status
 - M0 ✅: skeleton. Stack up: PostgreSQL, SeaweedFS 4.53 (S3), api, worker, nginx. Migration 0001 (14 tables). /docs + /openapi.json 200. Frontend builds (Vite+TS).
-- M1 ✅: auth (register/login/refresh/logout/me/change-password, JWT httpOnly cookies, rate limit), upload (presigned init→complete→transcode job), worker (ffprobe validate, ≤720p H.264 faststart + poster, retries ≤3), videos feed + get/stream/poster with visibility authz (private/unlisted 403, hidden 404 except mod/admin), owner/mod/admin role checks server-side. Layered routers→services→repositories. Tests 22.
-- M2 ✅: like/unlike (idempotent), comments (paginated, sort, create/edit/delete own, reply_count), subscriptions (idempotent, no self-sub, counts), channel endpoints (ChannelOut, videos, playlists), playlists CRUD + items (add/remove/move reindex), search (videos+channels), related videos, view counter (owner-skip). BE tests 30 green. FE: watch page (player, like, subscribe, comments, recommendations), channel page (tabs, subscribe), playlist page, search page. Frontend builds clean.
-- ✅ Verified E2E M2: register→like→subscribe→comment→search; /openapi.json 36 paths live.
+- M1 ✅: auth, upload (presigned init→complete→transcode), worker (ffprobe, ≤720p H.264 faststart + poster, retries), feed/get/stream/poster with visibility authz, role checks server-side. Layered routers→services→repositories.
+- M2 ✅: like/comments/subscriptions/channel/playlists/search/related/view counter. FE watch/channel/playlist/search pages. Tests green.
+- M3 ✅: access matrix in `ensure_can_view` (public/unlisted=all; private=owner+shared+mod/admin else 403; hidden=mod/admin else 404 incl owner), video_shares (owner add/remove, list), `GET /api/videos/mine`, reports (create/dup 409/self 400/mine), moderation (list/resolve hide↔restore/actions, mod+admin), admin (users list/role change/deactivate, admin only, self-guard). FE: MyVideos (edit/delete/share mgmt), report button, Moderation screen, Admin roles screen. BE 36 tests green + scripts/smoke.py (M3 privacy/role matrix) passed. Frontend builds clean (vue-tsc + vite).
 - ⚠ SeaweedFS S3 root returns 403 (no auth) → healthcheck uses `nc -z 8333`. Old CloudServer `s3_data` volume orphaned (harmless).
 - ⚠ Worker image has no bind mount (prod build) — rebuild after backend changes: `docker compose build worker && docker compose up -d worker`.
-- Not done (M3+): visibility share management, reports/moderation, admin roles screen, seed (still no-op stub).
-- Next M3: privacy roles moderation (visibility + video_shares, reports, hide/unhide, admin role change, owner edit/delete).
+- Not done (M4+): seed (still no-op stub), install.sh hardening, README, docs (architecture/DB schema/security).
+- Next M4: seed (idempotent: admin/moderator/3 users/10 videos incl private+unlisted+hidden, comments/likes/subs/playlist/report), install.sh, README, docs, full suite once + smoke.py, clean Ubuntu VM test.
