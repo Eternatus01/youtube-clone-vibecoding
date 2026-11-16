@@ -59,5 +59,6 @@ FE: YouTube look (spacing, typography, skeletons, responsive, empty/error states
 - ✅ Verified E2E: register→init→PUT→complete→ready(2s)→feed; private video 403 meta/stream/poster to others, 200 to owner; /docs + /openapi.json (34 paths) 200; S3 port 8333 not published.
 - ⚠ SeaweedFS S3 root returns 403 (no auth) → healthcheck uses `nc -z 8333`. Old CloudServer `s3_data` volume orphaned (harmless).
 - ⚠ Worker image has no bind mount (prod build) — rebuild after backend changes: `docker compose build worker && docker compose up -d worker`.
+- ✅ nginx serves built frontend (`frontend/dist` via root+try_files, /assets/ cached) instead of Vite dev proxy.
 - Not done (M2+): like/unlike, comments, subscriptions, channel, playlists, search, moderation, admin, seed (still no-op stub).
 - Next M2: watch page, interactions, channel, search, recommendations.
