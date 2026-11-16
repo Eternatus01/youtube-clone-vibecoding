@@ -180,6 +180,18 @@ const initials = () =>
               <div class="menu-username">{{ auth.user?.username }}</div>
               <div class="menu-email">{{ auth.user?.email }}</div>
             </div>
+            <!-- Dropdown only renders when authenticated; server enforces the rest. -->
+            <RouterLink
+              v-if="auth.user"
+              :to="`/channel/${auth.user.id}`"
+              class="menu-item"
+              @click="closeMenu"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 12c4.4 0 8 2 8 4.5V21H4v-2.5C4 16 7.6 14 12 14z" />
+              </svg>
+              Мой канал
+            </RouterLink>
             <RouterLink to="/my-videos" class="menu-item" @click="closeMenu">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zm5 3v6l5-3-5-3z" />
@@ -217,28 +229,26 @@ const initials = () =>
           </svg>
           <span class="side-label">Home</span>
         </RouterLink>
-        <button
-          type="button"
-          class="side-link dead-link"
-          title="Coming soon"
-          disabled
+        <RouterLink
+          to="/subscriptions"
+          class="side-link"
+          :class="{ active: route.name === 'subscriptions' }"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <path d="M4 6h16v2H4V6zm2-3h12v2H6V3zm-2 7h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm6 2.5v6l5-3-5-3z" />
           </svg>
-          <span class="side-label">Subscriptions</span>
-        </button>
-        <button
-          type="button"
-          class="side-link dead-link"
-          title="Coming soon"
-          disabled
+          <span class="side-label">Подписки</span>
+        </RouterLink>
+        <RouterLink
+          to="/history"
+          class="side-link"
+          :class="{ active: route.name === 'history' }"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <path d="M13 3a9 9 0 1 0 8.94 10h-2.02A7 7 0 1 1 13 5c1.93 0 3.68.79 4.95 2.05L15 10h7V3l-2.65 2.65A8.96 8.96 0 0 0 13 3zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8H12z" />
           </svg>
-          <span class="side-label">History</span>
-        </button>
+          <span class="side-label">История</span>
+        </RouterLink>
         <RouterLink
           v-if="auth.isAuthenticated"
           to="/my-videos"

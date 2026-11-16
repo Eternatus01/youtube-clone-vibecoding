@@ -66,6 +66,18 @@ export const router = createRouter({
       meta: { guestOnly: true },
     },
     {
+      path: '/history',
+      name: 'history',
+      component: () => import('../pages/HistoryPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/subscriptions',
+      name: 'subscriptions',
+      component: () => import('../pages/SubscriptionsPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: { name: 'home' },
     },
