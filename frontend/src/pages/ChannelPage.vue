@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { ListVideo, VideoOff } from 'lucide-vue-next'
+import { RouterLink, useRoute } from 'vue-router'
+import { ListVideo, Pencil, VideoOff } from 'lucide-vue-next'
 import { api } from '../api/client'
 import type { components } from '../api/schema'
 import { useAuthStore } from '../stores/auth'
@@ -142,11 +142,25 @@ watch(
     </div>
 
     <template v-else-if="channel">
-      <!-- Banner 16:5, neutral surface -->
-      <div class="banner"></div>
+      <!-- Banner 16:5: cover image when set, neutral gradient otherwise -->
+      <div class="banner" :class="{ 'with-cover': !!channel.cover_url }">
+        <img
+          v-if="channel.cover_url"
+          :src="channel.cover_url"
+          :alt="`Обложка канала ${channel.username}`"
+          class="cover-img"
+        />
+      </div>
 
       <div class="channel-head">
-        <span class="avatar avatar-128">
+        <span v-if="channel.avatar_url" class="avatar avatar-128">
+          <img
+            :src="channel.avatar_url"
+            :alt="`Аватар канала ${channel.username}`"
+            class="avatar-img"
+          />
+        </span>
+        <span v-else class="avatar avatar-128">
           {{ (channel.username || '?').charAt(0).toUpperCase() }}
         </span>
         <div class="channel-info">
@@ -157,15 +171,21 @@ watch(
             • {{ channel.video_count }} видео
           </p>
         </div>
-        <button
-          v-if="canSubscribe"
-          class="pill subscribe-pill"
-          :class="{ subscribed: channel.is_subscribed }"
-          :disabled="subscribePending"
-          @click="toggleSubscribe"
-        >
-          {{ channel.is_subscribed ? 'Вы подписаны' : 'Подписаться' }}
-        </button>
+        <div class="head-actions">
+          <RouterLink v-if="isOwner" to="/channel/edit" class="pill edit-pill">
+            <Pencil :size="16" />
+            Редактировать канал
+          </RouterLink>
+          <button
+            v-if="canSubscribe"
+            class="pill subscribe-pill"
+            :class="{ subscribed: channel.is_subscribed }"
+            :disabled="subscribePending"
+            @click="toggleSubscribe"
+          >
+            {{ channel.is_subscribed ? 'Вы подписаны' : 'Подписаться' }}
+          </button>
+        </div>
       </div>
 
       <div class="tabs" role="tablist">
@@ -243,6 +263,22 @@ watch(
   aspect-ratio: 16 / 5;
   background: var(--surface);
   border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Gradient placeholder variant (no cover uploaded) */
+.banner:not(.with-cover) {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-hover) 100%);
+}
+
+.cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 /* ---- Head row ---- */
@@ -272,6 +308,14 @@ watch(
   font-size: 48px;
   border: 4px solid var(--bg);
   margin-top: -64px;
+  overflow: hidden;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .channel-info {
@@ -334,6 +378,21 @@ watch(
   background: var(--surface-hover);
 }
 
+/* ---- Edit + subscribe cluster ---- */
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.edit-pill {
+  text-decoration: none;
+}
+
+.edit-pill:hover {
+  background: var(--surface-hover);
+}
+
 /* ---- Tabs ---- */
 .tabs {
   display: flex;
@@ -367,7 +426,7 @@ watch(
 /* ---- Grid (same as HomePage) ---- */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 24px 16px;
 }
 

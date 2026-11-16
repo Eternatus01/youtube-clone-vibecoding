@@ -19,6 +19,8 @@ const file = ref<File | null>(null)
 const title = ref('')
 const description = ref('')
 const visibility = ref<Visibility>('public')
+const tags = ref<string[]>([])
+const tagsInput = ref('')
 
 const phase = ref<Phase>('form')
 const progress = ref(0)
@@ -33,6 +35,16 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const canSubmit = computed(
   () => file.value !== null && title.value.trim().length > 0 && phase.value === 'form',
 )
+
+/** Split the raw input on commas, trim and de-duplicate. */
+const parsedTags = computed(() => {
+  const seen = new Set<string>()
+  for (const raw of tagsInput.value.split(',')) {
+    const t = raw.trim()
+    if (t) seen.add(t)
+  }
+  return [...seen]
+})
 
 function pickFile() {
   fileInput.value?.click()
@@ -78,6 +90,19 @@ function reset() {
   progress.value = 0
   errorMessage.value = ''
   readyVideoId.value = ''
+  tags.value = []
+  tagsInput.value = ''
+}
+
+/** Commit the current input into the tags list. */
+function commitTags() {
+  tags.value = parsedTags.value
+  tagsInput.value = tags.value.join(', ')
+}
+
+function removeTag(tag: string) {
+  tags.value = tags.value.filter((t) => t !== tag)
+  tagsInput.value = tags.value.join(', ')
 }
 
 async function startUpload() {
@@ -96,6 +121,7 @@ async function startUpload() {
         title: title.value.trim(),
         description: description.value.trim() || null,
         visibility: visibility.value,
+        tags: tags.value,
       },
     })
     if (init.error || !init.data) {
@@ -232,6 +258,32 @@ onBeforeUnmount(stopPolling)
           <div class="field">
             <label for="description">Описание</label>
             <textarea id="description" v-model="description" class="input" rows="5"></textarea>
+          </div>
+
+          <div class="field">
+            <label for="tags">Теги</label>
+            <input
+              id="tags"
+              v-model="tagsInput"
+              class="input input-lg"
+              type="text"
+              placeholder="Теги (через запятую)"
+              @keydown.enter.prevent="commitTags"
+              @blur="commitTags"
+            />
+            <div v-if="tags.length" class="tags-list">
+              <span v-for="t in tags" :key="t" class="tag-chip">
+                {{ t }}
+                <button
+                  type="button"
+                  class="tag-remove"
+                  :aria-label="`Удалить тег ${t}`"
+                  @click="removeTag(t)"
+                >
+                  <X :size="12" stroke-width="2" />
+                </button>
+              </span>
+            </div>
           </div>
 
           <div class="field">
@@ -406,6 +458,42 @@ onBeforeUnmount(stopPolling)
   color: var(--danger);
   font-size: 12px;
   margin-bottom: 12px;
+}
+
+/* ---- Tags chips ---- */
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  user-select: none;
+}
+
+.tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--text-2);
+}
+
+.tag-remove:hover {
+  color: var(--danger);
 }
 
 /* ---- Progress / status ---- */

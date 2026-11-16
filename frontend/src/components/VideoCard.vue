@@ -64,12 +64,13 @@ const meta = computed(() => [views(), age()].filter(Boolean).join(' • '))
   display: block;
   cursor: pointer;
   color: var(--text);
+  min-width: 300px;
 }
 
 .thumb {
   position: relative;
   aspect-ratio: 16 / 9;
-  border-radius: var(--radius);
+  border-radius: 12px;
   overflow: hidden;
   background: var(--surface);
 }
@@ -130,8 +131,8 @@ const meta = computed(() => [views(), age()].filter(Boolean).join(' • '))
 
 .title {
   color: var(--text);
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: 600;
+  font-size: 15px;
   line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -143,7 +144,7 @@ const meta = computed(() => [views(), age()].filter(Boolean).join(' • '))
 .channel {
   display: block;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.4;
   margin-bottom: 2px;
   width: fit-content;
@@ -155,7 +156,7 @@ const meta = computed(() => [views(), age()].filter(Boolean).join(' • '))
 
 .meta {
   color: var(--text-2);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.4;
 }
 </style>

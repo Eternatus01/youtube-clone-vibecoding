@@ -41,7 +41,7 @@ const commentFocused = ref(false)
 
 // ---- Like state (optimistic) ----
 const likePending = ref(false)
-const myLike = ref<boolean | null>(null) // true = liked, false/null = not liked
+const likeStatus = ref<'like' | 'dislike' | null>(null)
 const likeCount = ref(0)
 const dislikeCount = ref(0)
 
@@ -106,7 +106,7 @@ async function load() {
     return
   }
   video.value = data
-  myLike.value = data.user_like ?? null
+  likeStatus.value = data.user_like ?? null
   likeCount.value = data.like_count
   dislikeCount.value = data.dislike_count
   loading.value = false
@@ -163,7 +163,7 @@ function showMoreComments() {
   }
 }
 
-// ---- Like toggle ----
+// ---- Like/dislike toggle ----
 /**
  * Optimistically apply a vote transition, then reconcile `user_like` with the
  * returned LikeInfo. If the server disagrees with our optimistic guess, the
@@ -173,18 +173,18 @@ async function toggleLike() {
   if (!auth.user || !video.value || likePending.value) return
   likePending.value = true
   const id = video.value.id
-  const wasLiked = myLike.value === true
+  const wasLiked = likeStatus.value === 'like'
 
   // Optimistic counts.
   if (wasLiked) {
     likeCount.value = Math.max(0, likeCount.value - 1)
-    myLike.value = null
+    likeStatus.value = null
   } else {
-    if (myLike.value === false) {
+    if (likeStatus.value === 'dislike') {
       dislikeCount.value = Math.max(0, dislikeCount.value - 1)
     }
     likeCount.value += 1
-    myLike.value = true
+    likeStatus.value = 'like'
   }
 
   const { data, error: apiError } = wasLiked
@@ -202,15 +202,50 @@ async function toggleLike() {
     await resyncVideo(id)
     return
   }
-  syncFromLikeInfo(data, wasLiked, id)
+  syncFromLikeInfo(data, wasLiked ? 'like' : null, id)
 }
 
-function syncFromLikeInfo(info: LikeInfo, wasLiked: boolean, id: string) {
-  const serverLiked = info.liked === true
-  myLike.value = serverLiked ? true : null
+async function toggleDislike() {
+  if (!auth.user || !video.value || likePending.value) return
+  likePending.value = true
+  const id = video.value.id
+  const wasDisliked = likeStatus.value === 'dislike'
+
+  // Optimistic counts.
+  if (wasDisliked) {
+    dislikeCount.value = Math.max(0, dislikeCount.value - 1)
+    likeStatus.value = null
+  } else {
+    if (likeStatus.value === 'like') {
+      likeCount.value = Math.max(0, likeCount.value - 1)
+    }
+    dislikeCount.value += 1
+    likeStatus.value = 'dislike'
+  }
+
+  const { data, error: apiError } = wasDisliked
+    ? await api.DELETE('/api/videos/{video_id}/dislike', {
+        params: { path: { video_id: id } },
+      })
+    : await api.POST('/api/videos/{video_id}/dislike', {
+        params: { path: { video_id: id } },
+      })
+
+  likePending.value = false
+  if (apiError || !data) {
+    toast.push('Не удалось сохранить оценку')
+    await resyncVideo(id)
+    return
+  }
+  syncFromLikeInfo(data, wasDisliked ? 'dislike' : null, id)
+}
+
+function syncFromLikeInfo(info: LikeInfo, wasApplied: 'like' | 'dislike' | null, id: string) {
+  const serverStatus = info.like_status ?? null
+  likeStatus.value = serverStatus
   // The LikeInfo payload carries no counts; if our optimistic guess matched
   // the server transition they are already right, otherwise resync.
-  if (serverLiked === wasLiked) {
+  if (serverStatus === wasApplied) {
     void resyncVideo(id)
   }
 }
@@ -221,7 +256,7 @@ async function resyncVideo(id: string) {
   })
   if (data) {
     video.value = data
-    myLike.value = data.user_like ?? null
+    likeStatus.value = data.user_like ?? null
     likeCount.value = data.like_count
     dislikeCount.value = data.dislike_count
   }
@@ -297,8 +332,10 @@ function cancelComment() {
   commentFocused.value = false
 }
 
-function canDelete(comment: CommentOut): boolean {
-  return !!auth.user && comment.author_id === auth.user.id
+function canDelete(_comment: CommentOut): boolean {
+  // Authors can no longer delete their comments; only moderators/admins can.
+  const role = auth.user?.role
+  return role === 'moderator' || role === 'admin'
 }
 
 async function deleteComment(comment: CommentOut) {
@@ -419,7 +456,7 @@ watch(
           <div class="actions-row">
             <button
               class="pill like-pill"
-              :class="{ active: myLike === true }"
+              :class="{ active: likeStatus === 'like' }"
               :disabled="!auth.user || likePending"
               :title="auth.user ? undefined : 'Войдите, чтобы оценить'"
               @click="toggleLike"
@@ -429,10 +466,10 @@ watch(
             </button>
             <button
               class="pill like-pill"
-              :class="{ active: myLike === false }"
+              :class="{ active: likeStatus === 'dislike' }"
               :disabled="!auth.user || likePending"
               :title="auth.user ? undefined : 'Войдите, чтобы оценить'"
-              @click="toggleLike"
+              @click="toggleDislike"
             >
               <ThumbsDown :size="20" />
               <span>{{ dislikeCount }}</span>

@@ -37,6 +37,9 @@ async function load() {
         page: 1,
         page_size: 20,
         ...(search.value ? { search: search.value } : {}),
+        ...(activeCategory.value !== 'Все'
+          ? { tag: activeCategory.value.toLowerCase() }
+          : {}),
       },
     },
   })
@@ -49,6 +52,12 @@ async function load() {
     videos.value = (data.items as VideoOut[]) ?? []
   }
   loading.value = false
+}
+
+function selectCategory(c: string) {
+  if (activeCategory.value === c) return
+  activeCategory.value = c
+  load()
 }
 
 function retry() {
@@ -74,7 +83,7 @@ watch(
         class="chip"
         :class="{ active: c === activeCategory }"
         :aria-pressed="c === activeCategory"
-        @click="activeCategory = c"
+        @click="selectCategory(c)"
       >
         {{ c }}
       </button>
@@ -107,14 +116,14 @@ watch(
     </div>
 
     <div v-else-if="!error" class="empty-state">
-      <h2>{{ search ? 'По вашему запросу ничего не найдено' : 'Нет видео' }}</h2>
-      <p>
-        {{
-          search
-            ? 'Попробуйте изменить поисковый запрос.'
-            : 'Будьте первым, кто загрузит видео!'
-        }}
+      <h2 v-if="activeCategory !== 'Все'">Нет видео по этому тегу</h2>
+      <h2 v-else-if="search">По вашему запросу ничего не найдено</h2>
+      <h2 v-else>Нет видео</h2>
+      <p v-if="activeCategory !== 'Все'">
+        Попробуйте другой тег или выберите «Все».
       </p>
+      <p v-else-if="search">Попробуйте изменить поисковый запрос.</p>
+      <p v-else>Будьте первым, кто загрузит видео!</p>
     </div>
   </div>
 </template>
@@ -169,7 +178,7 @@ watch(
 /* ---- Grid ---- */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 24px 16px;
 }
 

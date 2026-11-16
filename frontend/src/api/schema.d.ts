@@ -287,6 +287,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/videos/{video_id}/dislike": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dislike Video */
+        post: operations["dislike_video_api_videos__video_id__dislike_post"];
+        /** Remove Dislike */
+        delete: operations["undislike_video_api_videos__video_id__dislike_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/videos/{video_id}/related": {
         parameters: {
             query?: never;
@@ -354,6 +372,41 @@ export interface paths {
         get: operations["get_my_channel_api_channels_me_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update My Channel */
+        patch: operations["update_my_channel_api_channels_me_patch"];
+        trace?: never;
+    };
+    "/api/channels/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Channel Avatar */
+        post: operations["upload_channel_avatar_api_channels_me_avatar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/channels/me/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Channel Cover */
+        post: operations["upload_channel_cover_api_channels_me_cover_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -837,6 +890,13 @@ export interface components {
             video_count: number;
             /** Is Subscribed */
             is_subscribed?: boolean | null;
+            /** Cover Url */
+            cover_url?: string | null;
+        };
+        /** ChannelUpdate */
+        ChannelUpdate: {
+            /** Username */
+            username?: string | null;
         };
         /** CommentCreate */
         CommentCreate: {
@@ -886,8 +946,8 @@ export interface components {
         };
         /** LikeInfo */
         LikeInfo: {
-            /** Liked */
-            liked?: boolean | null;
+            /** Like Status */
+            like_status?: "like" | "dislike" | null;
         };
         /** ModerationActionOut */
         ModerationActionOut: {
@@ -1247,7 +1307,7 @@ export interface components {
              */
             dislike_count: number;
             /** User Like */
-            user_like?: boolean | null;
+            user_like?: "like" | "dislike" | null;
             /**
              * Comment Count
              * @default 0
@@ -1258,6 +1318,11 @@ export interface components {
              * @default []
              */
             in_playlists: components["schemas"]["PlaylistRef"][];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
         };
         /** VideoShareCreate */
         VideoShareCreate: {
@@ -1308,6 +1373,11 @@ export interface components {
              * @default public
              */
             visibility: string;
+            /**
+             * Tags
+             * @default []
+             */
+            tags?: string[];
         };
     };
     responses: never;
@@ -1591,6 +1661,7 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 search?: string | null;
+                tag?: string | null;
             };
             header?: never;
             path?: never;
@@ -1967,6 +2038,68 @@ export interface operations {
             };
         };
     };
+    dislike_video_api_videos__video_id__dislike_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LikeInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undislike_video_api_videos__video_id__dislike_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LikeInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     related_videos_api_videos__video_id__related_get: {
         parameters: {
             query?: {
@@ -2153,6 +2286,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChannelOut"];
+                };
+            };
+        };
+    };
+    update_my_channel_api_channels_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_channel_avatar_api_channels_me_avatar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    file: Blob | File;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_channel_cover_api_channels_me_cover_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    file: Blob | File;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

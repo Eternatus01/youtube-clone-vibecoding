@@ -20,6 +20,12 @@ export const router = createRouter({
       component: () => import('../pages/ChannelPage.vue'),
     },
     {
+      path: '/channel/edit',
+      name: 'channel-edit',
+      component: () => import('../pages/ChannelEditPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/search',
       name: 'search',
       component: () => import('../pages/SearchPage.vue'),
