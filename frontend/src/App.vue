@@ -247,7 +247,13 @@ const firstLetter = computed(() => (auth.user?.username ?? '?').charAt(0).toUppe
 
         <div v-else class="user-menu">
           <button class="avatar" :title="auth.user?.username" @click="toggleMenu">
-            {{ firstLetter }}
+            <img
+              v-if="auth.user?.avatar_url"
+              class="avatar-img"
+              :src="auth.user.avatar_url"
+              alt=""
+            />
+            <template v-else>{{ firstLetter }}</template>
           </button>
           <div v-if="menuOpen" class="menu-dropdown">
             <RouterLink
@@ -557,6 +563,14 @@ const firstLetter = computed(() => (auth.user?.username ?? '?').charAt(0).toUppe
   justify-content: center;
   font-size: 14px;
   font-weight: 600;
+  overflow: hidden;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .menu-dropdown {
