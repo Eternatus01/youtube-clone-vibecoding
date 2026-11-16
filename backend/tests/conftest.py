@@ -160,6 +160,10 @@ class FakeS3:
     def _missing(self, key: str) -> ClientError:
         return ClientError({"Error": {"Code": "NoSuchKey", "Message": key}}, "GetObject")
 
+    def put_object(self, Bucket, Key, Body, ContentType="application/octet-stream"):
+        data = Body.read() if hasattr(Body, "read") else Body
+        self.objects[Key] = {"data": data, "content_type": ContentType}
+
     def head_object(self, Bucket, Key):
         if Key not in self.objects:
             raise self._missing(Key)

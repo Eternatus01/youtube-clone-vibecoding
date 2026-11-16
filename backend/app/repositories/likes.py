@@ -12,8 +12,10 @@ async def get(db: AsyncSession, video_id: str, user_id: str) -> Like | None:
     return result.scalar_one_or_none()
 
 
-async def create(db: AsyncSession, *, video_id: str, user_id: str) -> Like:
-    like = Like(video_id=video_id, user_id=user_id, is_like=True)
+async def create(
+    db: AsyncSession, *, video_id: str, user_id: str, is_like: bool = True
+) -> Like:
+    like = Like(video_id=video_id, user_id=user_id, is_like=is_like)
     db.add(like)
     try:
         await db.commit()

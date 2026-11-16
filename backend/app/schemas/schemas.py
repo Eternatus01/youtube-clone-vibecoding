@@ -1,6 +1,17 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+
+
+def _presign_storage_ref(value: str | None) -> str | None:
+    """Turn a stored S3 key into a short-TTL presigned URL for display."""
+    if not value:
+        return value
+    if value.startswith(("http://", "https://", "/storage/")):
+        return value
+    from app.core.s3_client import generate_presigned_get
+
+    return generate_presigned_get(value)
 
 
 # ---- Auth ----
@@ -34,9 +45,16 @@ class UserOut(BaseModel):
     email: str
     role: str
     avatar_url: str | None = None
+    cover_url: str | None = None
+    description: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("avatar_url", "cover_url")
+    @classmethod
+    def _presign(cls, value: str | None) -> str | None:
+        return _presign_storage_ref(value)
 
 
 class UserUpdate(BaseModel):
@@ -58,6 +76,7 @@ class VideoUploadInit(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str | None = None
     visibility: str = "public"
+    tags: list[str] | None = None
 
 
 class PresignedUrlResponse(BaseModel):
@@ -71,6 +90,7 @@ class VideoUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = None
     visibility: str | None = None
+    tags: list[str] | None = None
 
 
 class VideoOut(BaseModel):
@@ -82,11 +102,13 @@ class VideoOut(BaseModel):
     status: str
     views: int
     duration_seconds: int | None = None
+    tags: list[str] | None = None
+    custom_poster_url: str | None = None
     created_at: datetime
     owner: UserOut | None = None
     like_count: int = 0
     dislike_count: int = 0
-    user_like: bool | None = None
+    user_like: str | None = None
     comment_count: int = 0
     in_playlists: list["PlaylistRef"] = []
 
@@ -134,7 +156,7 @@ class CommentOut(BaseModel):
 # ---- Likes ----
 
 class LikeInfo(BaseModel):
-    liked: bool | None = None
+    like_status: str | None = None
 
 
 # ---- Subscriptions ----
@@ -152,12 +174,24 @@ class ChannelOut(BaseModel):
     id: str
     username: str
     avatar_url: str | None = None
+    cover_url: str | None = None
+    description: str | None = None
     created_at: datetime
     subscriber_count: int = 0
     video_count: int = 0
     is_subscribed: bool | None = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("avatar_url", "cover_url")
+    @classmethod
+    def _presign(cls, value: str | None) -> str | None:
+        return _presign_storage_ref(value)
+
+
+class ChannelUpdate(BaseModel):
+    username: str | None = Field(None, min_length=3, max_length=50)
+    description: str | None = None
 
 
 # ---- Playlists ----

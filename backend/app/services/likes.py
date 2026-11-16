@@ -14,21 +14,46 @@ def _ensure_likeable(video: Video) -> None:
         )
 
 
-async def like_video(db: AsyncSession, video_id: str, user) -> LikeInfo:
+async def _set_reaction(
+    db: AsyncSession, video_id: str, user, *, is_like: bool
+) -> LikeInfo:
     video = await videos_service.get_video(db, video_id, user)
     _ensure_likeable(video)
     like = await likes_repo.get(db, video.id, user.id)
     if like is None:
-        await likes_repo.create(db, video_id=video.id, user_id=user.id)
-    elif not like.is_like:
-        like.is_like = True
+        created = await likes_repo.create(
+            db, video_id=video.id, user_id=user.id, is_like=is_like
+        )
+        # A concurrent insert may have won the unique constraint with the
+        # opposite reaction; reconcile so the stored row matches the request.
+        if created.is_like != is_like:
+            created.is_like = is_like
+            await likes_repo.save(db, created)
+    elif like.is_like != is_like:
+        like.is_like = is_like
         await likes_repo.save(db, like)
-    return LikeInfo(liked=True)
+    return LikeInfo(like_status="like" if is_like else "dislike")
 
 
-async def unlike_video(db: AsyncSession, video_id: str, user) -> LikeInfo:
+async def _clear_reaction(db: AsyncSession, video_id: str, user) -> LikeInfo:
     video = await videos_service.get_video(db, video_id, user)
     like = await likes_repo.get(db, video.id, user.id)
     if like is not None:
         await likes_repo.delete_like(db, like)
-    return LikeInfo(liked=False)
+    return LikeInfo(like_status=None)
+
+
+async def like_video(db: AsyncSession, video_id: str, user) -> LikeInfo:
+    return await _set_reaction(db, video_id, user, is_like=True)
+
+
+async def dislike_video(db: AsyncSession, video_id: str, user) -> LikeInfo:
+    return await _set_reaction(db, video_id, user, is_like=False)
+
+
+async def unlike_video(db: AsyncSession, video_id: str, user) -> LikeInfo:
+    return await _clear_reaction(db, video_id, user)
+
+
+async def undislike_video(db: AsyncSession, video_id: str, user) -> LikeInfo:
+    return await _clear_reaction(db, video_id, user)

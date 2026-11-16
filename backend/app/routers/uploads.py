@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
@@ -30,3 +30,14 @@ async def complete_upload(
     db: AsyncSession = Depends(get_db),
 ):
     return await uploads_service.complete_upload(db, body.upload_session_id, current_user)
+
+
+@router.post("/{video_id}/poster", status_code=status.HTTP_200_OK)
+async def upload_poster(
+    video_id: str,
+    poster: UploadFile = File(...),
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a custom thumbnail for a video. Owner or moderator only."""
+    return await uploads_service.set_video_poster(db, video_id, poster, current_user)

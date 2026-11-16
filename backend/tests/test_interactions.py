@@ -20,24 +20,37 @@ async def test_like_is_idempotent(client, make_client, session_factory):
 
     first = await voter.post(f"/api/videos/{video.id}/like")
     assert first.status_code == 200, first.text
-    assert first.json() == {"liked": True}
+    assert first.json() == {"like_status": "like"}
 
     again = await voter.post(f"/api/videos/{video.id}/like")
     assert again.status_code == 200
-    assert again.json() == {"liked": True}
+    assert again.json() == {"like_status": "like"}
 
     detail = await voter.get(f"/api/videos/{video.id}")
     assert detail.json()["like_count"] == 1
-    assert detail.json()["user_like"] is True
+    assert detail.json()["user_like"] == "like"
 
     unlike = await voter.delete(f"/api/videos/{video.id}/like")
     assert unlike.status_code == 200
-    assert unlike.json() == {"liked": False}
+    assert unlike.json() == {"like_status": None}
 
     repeat = await voter.delete(f"/api/videos/{video.id}/like")
     assert repeat.status_code == 200
-    assert repeat.json() == {"liked": False}
+    assert repeat.json() == {"like_status": None}
     assert (await voter.get(f"/api/videos/{video.id}")).json()["like_count"] == 0
+
+    # Test dislike
+    dislike = await voter.post(f"/api/videos/{video.id}/dislike")
+    assert dislike.status_code == 200
+    assert dislike.json() == {"like_status": "dislike"}
+
+    detail2 = await voter.get(f"/api/videos/{video.id}")
+    assert detail2.json()["dislike_count"] == 1
+    assert detail2.json()["user_like"] == "dislike"
+
+    undislike = await voter.delete(f"/api/videos/{video.id}/dislike")
+    assert undislike.status_code == 200
+    assert undislike.json() == {"like_status": None}
 
 
 async def test_like_respects_visibility_and_status(

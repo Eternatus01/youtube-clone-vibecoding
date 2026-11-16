@@ -74,6 +74,8 @@ class User(Base, TimestampMixin):
         Enum(Role, name="role"), default=Role.user, nullable=False
     )
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    cover_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     videos: Mapped[list["Video"]] = relationship(back_populates="owner")
@@ -107,6 +109,8 @@ class Video(Base, TimestampMixin):
     )
     views: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tags: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    custom_poster_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     owner: Mapped["User"] = relationship(back_populates="videos")
     assets: Mapped[list["VideoAsset"]] = relationship(

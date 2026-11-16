@@ -18,9 +18,12 @@ async def get_feed(
     db: AsyncSession,
     *,
     search: str | None,
+    tag: str | None = None,
     offset: int,
     limit: int,
 ) -> tuple[list[Video], int]:
+    if limit == 0:
+        limit = 20
     conditions = [
         Video.status == VideoStatus.ready,
         Video.visibility == Visibility.public,
@@ -28,6 +31,9 @@ async def get_feed(
     if search:
         escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         conditions.append(Video.title.ilike(f"%{escaped}%", escape="\\"))
+    if tag:
+        # JSONB containment: the tags array must include this exact tag.
+        conditions.append(Video.tags.contains([tag]))
 
     total = await db.scalar(select(func.count(Video.id)).where(*conditions))
     result = await db.execute(

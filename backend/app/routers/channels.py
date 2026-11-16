@@ -1,9 +1,14 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.dependencies.auth import get_current_user, get_current_user_optional
-from app.schemas.schemas import ChannelOut, PaginatedResponse, SubscriptionOut
+from app.schemas.schemas import (
+    ChannelOut,
+    ChannelUpdate,
+    PaginatedResponse,
+    SubscriptionOut,
+)
 from app.services import channels as channels_service
 
 router = APIRouter(prefix="/api/channels", tags=["channels"])
@@ -16,6 +21,34 @@ async def get_my_channel(
 ):
     """Resolve the authenticated user's own channel."""
     return await channels_service.get_channel(db, current_user.id, current_user)
+
+
+@router.patch("/me", response_model=ChannelOut)
+async def update_my_channel(
+    body: ChannelUpdate,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update the authenticated user's channel profile."""
+    return await channels_service.update_channel(db, current_user, body)
+
+
+@router.post("/me/avatar", response_model=ChannelOut)
+async def upload_my_avatar(
+    avatar: UploadFile = File(...),
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await channels_service.set_avatar(db, current_user, avatar)
+
+
+@router.post("/me/cover", response_model=ChannelOut)
+async def upload_my_cover(
+    cover: UploadFile = File(...),
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await channels_service.set_cover(db, current_user, cover)
 
 
 @router.get("/{channel_id}", response_model=ChannelOut)

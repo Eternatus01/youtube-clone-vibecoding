@@ -4,14 +4,17 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories import channels as channels_repo
+from app.repositories import users as users_repo
 from app.repositories import videos as videos_repo
 from app.schemas.schemas import (
     ChannelOut,
+    ChannelUpdate,
     PaginatedResponse,
     SubscriptionOut,
     UserOut,
 )
 from app.services import playlists as playlists_service
+from app.services import uploads as uploads_service
 from app.services import videos as videos_service
 
 
@@ -39,6 +42,47 @@ async def get_channel(db: AsyncSession, channel_id: str, user) -> ChannelOut:
             "video_count": await channels_repo.video_count(db, channel.id),
             "is_subscribed": is_subscribed,
         }
+    )
+
+
+async def update_channel(db: AsyncSession, user, body: ChannelUpdate) -> ChannelOut:
+    """Update the authenticated user's own channel profile."""
+    if body.username is not None and body.username != user.username:
+        existing = await users_repo.get_by_username(db, body.username)
+        if existing is not None and existing.id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Username already taken",
+            )
+        user.username = body.username
+    if body.description is not None:
+        user.description = body.description
+    await db.commit()
+    await db.refresh(user)
+    return await get_channel(db, user.id, user)
+
+
+async def _set_channel_image(
+    db: AsyncSession, user, upload, *, field: str, key: str
+) -> ChannelOut:
+    stored_key = await uploads_service.store_image(
+        upload, key=key, max_size=uploads_service.MAX_CHANNEL_IMAGE_SIZE
+    )
+    setattr(user, field, stored_key)
+    await db.commit()
+    await db.refresh(user)
+    return await get_channel(db, user.id, user)
+
+
+async def set_avatar(db: AsyncSession, user, upload) -> ChannelOut:
+    return await _set_channel_image(
+        db, user, upload, field="avatar_url", key=f"avatars/{user.id}"
+    )
+
+
+async def set_cover(db: AsyncSession, user, upload) -> ChannelOut:
+    return await _set_channel_image(
+        db, user, upload, field="cover_url", key=f"covers/{user.id}"
     )
 
 

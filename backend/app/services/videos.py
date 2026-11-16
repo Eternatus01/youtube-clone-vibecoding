@@ -69,6 +69,9 @@ async def serialize_videos(db: AsyncSession, videos: list[Video], user) -> list[
     for video in videos:
         like_bucket = counts.get(video.id, {})
         out = VideoOut.model_validate(video)
+        user_like = None
+        if video.id in liked:
+            user_like = "like" if liked[video.id] else "dislike"
         result.append(
             out.model_copy(
                 update={
@@ -76,7 +79,7 @@ async def serialize_videos(db: AsyncSession, videos: list[Video], user) -> list[
                     "like_count": like_bucket.get("like", 0),
                     "dislike_count": like_bucket.get("dislike", 0),
                     "comment_count": comments.get(video.id, 0),
-                    "user_like": liked.get(video.id),
+                    "user_like": user_like,
                 }
             )
         )
@@ -93,12 +96,17 @@ async def list_feed(
     page: int,
     page_size: int,
     search: str | None,
+    tag: str | None = None,
     user,
 ) -> PaginatedResponse:
     page = max(page, 1)
-    page_size = min(max(page_size, 1), 100)
+    page_size = 20 if page_size == 0 else min(max(page_size, 1), 100)
     videos, total = await videos_repo.get_feed(
-        db, search=search, offset=(page - 1) * page_size, limit=page_size
+        db,
+        search=search,
+        tag=tag,
+        offset=(page - 1) * page_size,
+        limit=page_size,
     )
     items = await serialize_videos(db, videos, user)
     return PaginatedResponse(
@@ -228,6 +236,8 @@ async def update_video(db: AsyncSession, video: Video, body, user) -> VideoOut:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid visibility"
             )
+    if body.tags is not None:
+        video.tags = body.tags
     await videos_repo.save(db, video)
     return await serialize_video(db, video, user)
 

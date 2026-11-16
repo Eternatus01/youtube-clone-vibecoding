@@ -24,11 +24,17 @@ async def list_videos(
     page: int = 1,
     page_size: int = 20,
     search: str | None = None,
+    tag: str | None = None,
     current_user=Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     return await videos_service.list_feed(
-        db, page=page, page_size=page_size, search=search, user=current_user
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        tag=tag,
+        user=current_user,
     )
 
 
@@ -158,6 +164,9 @@ async def get_poster(
 ):
     """Proxies the video poster/thumbnail image. Same authz as get_video."""
     video = await videos_service.get_video(db, video_id, current_user)
+    if video.custom_poster_url:
+        obj = await videos_service.open_media(video.custom_poster_url, None)
+        return _media_response(obj, "image/jpeg")
     assets = await videos_service.get_assets(db, video.id)
     asset = videos_service.choose_poster_asset(assets)
     obj = await videos_service.open_media(asset.object_key, None)
@@ -180,6 +189,24 @@ async def unlike_video(
     db: AsyncSession = Depends(get_db),
 ):
     return await likes_service.unlike_video(db, video_id, current_user)
+
+
+@router.post("/{video_id}/dislike", response_model=LikeInfo)
+async def dislike_video(
+    video_id: str,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await likes_service.dislike_video(db, video_id, current_user)
+
+
+@router.delete("/{video_id}/dislike", response_model=LikeInfo)
+async def undislike_video(
+    video_id: str,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await likes_service.undislike_video(db, video_id, current_user)
 
 
 @router.get("/{video_id}/related", response_model=PaginatedResponse)

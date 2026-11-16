@@ -117,7 +117,7 @@ async def delete_comment(
 ) -> None:
     await videos_service.get_video(db, video_id, user)
     comment = await _get_comment(db, video_id, comment_id)
-    if comment.author_id != user.id and not videos_service.is_moderator(user):
+    if not videos_service.is_moderator(user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
