@@ -3,8 +3,20 @@
   "default_agent": "lead",
   "small_model": "tooken/deepseek-v4-pro",
   "compaction": { "auto": true, "prune": true },
+  
   "permission": {
     "edit": "allow",
+    "read": {
+      "*": "allow",
+      "*.png": "deny",
+      "*.jpg": "deny",
+      "*.jpeg": "deny",
+      "*.gif": "deny",
+      "*.webp": "deny",
+      "*.pdf": "deny",
+      "*.mp4": "deny",
+      ".env": "deny"
+    },
     "webfetch": "deny",
     "websearch": "deny",
     "codesearch": "deny",
