@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { formatDuration, formatViews, timeAgo } from '../utils/format'
 
 /** Minimal shape every card renders; VideoOut and SearchVideoOut both satisfy it. */
@@ -19,7 +19,10 @@ const posterFailed = ref(false)
 const duration = () => formatDuration(props.video.duration_seconds)
 const views = () => (props.video.views != null ? formatViews(props.video.views) : null)
 const age = () => timeAgo(props.video.created_at)
-const channel = () => props.video.owner?.username ?? 'Unknown channel'
+const username = computed(() => props.video.owner?.username ?? '')
+const channel = computed(() => username.value || 'Неизвестный канал')
+const initial = computed(() => username.value.charAt(0).toUpperCase())
+const meta = computed(() => [views(), age()].filter(Boolean).join(' • '))
 </script>
 
 <template>
@@ -40,12 +43,17 @@ const channel = () => props.video.owner?.username ?? 'Unknown channel'
       <span v-if="duration()" class="duration">{{ duration() }}</span>
     </div>
     <div class="info">
-      <div class="title" :title="video.title">{{ video.title }}</div>
-      <div class="channel">{{ channel() }}</div>
-      <div class="meta">
-        <span v-if="views()">{{ views() }}</span>
-        <span v-if="views() && age()">•</span>
-        <span v-if="age()">{{ age() }}</span>
+      <div v-if="initial" class="avatar" aria-hidden="true">{{ initial }}</div>
+      <div class="text">
+        <div class="title" :title="video.title">{{ video.title }}</div>
+        <RouterLink
+          v-if="username"
+          :to="{ name: 'channel', params: { username } }"
+          class="channel"
+          @click.stop
+        >{{ channel }}</RouterLink>
+        <span v-else class="channel">{{ channel }}</span>
+        <div v-if="meta" class="meta">{{ meta }}</div>
       </div>
     </div>
   </RouterLink>
@@ -55,21 +63,15 @@ const channel = () => props.video.owner?.username ?? 'Unknown channel'
 .card {
   display: block;
   cursor: pointer;
-  border-radius: 12px;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.card:hover {
-  transform: scale(1.02);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  color: var(--text);
 }
 
 .thumb {
   position: relative;
   aspect-ratio: 16 / 9;
-  border-radius: 12px;
+  border-radius: var(--radius);
   overflow: hidden;
-  background: var(--bg-elevated);
+  background: var(--surface);
 }
 
 .thumb img {
@@ -85,14 +87,14 @@ const channel = () => props.video.owner?.username ?? 'Unknown channel'
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
+  color: var(--text-2);
 }
 
 .duration {
   position: absolute;
-  right: 6px;
-  bottom: 6px;
-  padding: 2px 6px;
+  right: 4px;
+  bottom: 4px;
+  padding: 2px 4px;
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.8);
   color: #fff;
@@ -102,10 +104,32 @@ const channel = () => props.video.owner?.username ?? 'Unknown channel'
 }
 
 .info {
-  padding: 10px 4px 0;
+  display: flex;
+  gap: 12px;
+  padding: 12px 0 0;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 500;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.text {
+  min-width: 0;
 }
 
 .title {
+  color: var(--text);
   font-weight: 500;
   font-size: 14px;
   line-height: 1.35;
@@ -117,15 +141,21 @@ const channel = () => props.video.owner?.username ?? 'Unknown channel'
 }
 
 .channel {
-  color: var(--text-secondary);
+  display: block;
+  color: var(--text-2);
   font-size: 12px;
+  line-height: 1.4;
   margin-bottom: 2px;
+  width: fit-content;
+}
+
+.channel:hover {
+  color: var(--text);
 }
 
 .meta {
-  color: var(--text-secondary);
+  color: var(--text-2);
   font-size: 12px;
-  display: flex;
-  gap: 4px;
+  line-height: 1.4;
 }
 </style>

@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { Search as SearchIcon } from 'lucide-vue-next'
 import { api } from '../api/client'
 import type { components } from '../api/schema'
-import VideoCard from '../components/VideoCard.vue'
-import { formatViews } from '../utils/format'
+import {
+  formatDuration,
+  formatSubscribers,
+  formatViews,
+  timeAgo,
+} from '../utils/format'
 
 type SearchResult = components['schemas']['SearchResult']
 
@@ -30,7 +35,7 @@ async function load() {
     params: { query: { q: query.value, page: 1, page_size: 40 } },
   })
   if (apiError || !data) {
-    error.value = 'Search failed. Please try again.'
+    error.value = 'Не удалось выполнить поиск. Попробуйте ещё раз.'
     result.value = null
   } else {
     result.value = data
@@ -39,7 +44,7 @@ async function load() {
 }
 
 function retry() {
-  load()
+  void load()
 }
 
 onMounted(load)
@@ -54,22 +59,18 @@ watch(
 <template>
   <div class="page search-page">
     <h1 class="page-title">
-      {{ query ? `Results for “${query}”` : 'Search' }}
+      {{ query ? 'Результаты поиска' : 'Поиск' }}
     </h1>
 
     <div v-if="error" class="error-banner">
       {{ error }}
-      <button class="btn retry-btn" @click="retry">Retry</button>
+      <button class="btn retry-btn" @click="retry">Повторить</button>
     </div>
 
     <div v-if="loading" class="loading">
-      <div class="channel-skeleton">
-        <div class="skeleton avatar-skeleton"></div>
-        <div class="skeleton line-skeleton"></div>
-      </div>
-      <div class="grid">
-        <div v-for="n in 8" :key="n" class="card-skeleton">
-          <div class="skeleton thumb-skeleton"></div>
+      <div v-for="n in 4" :key="n" class="result-row-skeleton">
+        <div class="skeleton thumb-skeleton"></div>
+        <div class="result-row-skeleton-lines">
           <div class="skeleton line-skeleton"></div>
           <div class="skeleton line-skeleton short"></div>
         </div>
@@ -79,20 +80,20 @@ watch(
     <template v-else-if="result">
       <!-- Channels -->
       <section v-if="result.channels.length" class="channels-section">
-        <h2 class="section-title">Channels</h2>
+        <h2 class="section-title">Каналы</h2>
         <ul class="channel-list">
           <li v-for="c in result.channels" :key="c.id">
             <RouterLink
               :to="{ name: 'channel', params: { id: c.id } }"
               class="channel-row"
             >
-              <span class="avatar">
+              <span class="channel-avatar">
                 {{ (c.username || '?').charAt(0).toUpperCase() }}
               </span>
               <span class="channel-text">
                 <span class="channel-name">{{ c.username }}</span>
                 <span class="channel-meta">
-                  {{ formatViews(c.subscriber_count).replace(' views', ' subscribers') }}
+                  {{ formatSubscribers(c.subscriber_count) }}
                 </span>
               </span>
             </RouterLink>
@@ -100,35 +101,205 @@ watch(
         </ul>
       </section>
 
-      <!-- Videos -->
+      <!-- Videos: horizontal rows -->
       <section class="videos-section">
-        <h2 v-if="result.channels.length" class="section-title">Videos</h2>
-        <div v-if="result.videos.length" class="grid">
-          <VideoCard v-for="v in result.videos" :key="v.id" :video="v" />
+        <div v-if="result.videos.length" class="result-list">
+          <div v-for="v in result.videos" :key="v.id" class="result-row">
+            <RouterLink
+              :to="{ name: 'watch', params: { id: v.id } }"
+              class="result-thumb-link"
+            >
+              <span class="result-thumb-wrap">
+                <img
+                  class="result-thumb"
+                  :src="`/api/videos/${v.id}/poster`"
+                  alt=""
+                  loading="lazy"
+                />
+                <span v-if="v.duration_seconds" class="result-duration">
+                  {{ formatDuration(v.duration_seconds) }}
+                </span>
+              </span>
+            </RouterLink>
+            <div class="result-info">
+              <RouterLink
+                :to="{ name: 'watch', params: { id: v.id } }"
+                class="result-title"
+              >
+                {{ v.title }}
+              </RouterLink>
+              <div class="result-meta">
+                {{ formatViews(v.views) }} • {{ timeAgo(v.created_at) }}
+              </div>
+              <RouterLink
+                v-if="v.owner"
+                :to="{ name: 'channel', params: { id: v.owner.id } }"
+                class="result-channel"
+              >
+                <span class="result-avatar">
+                  {{ (v.owner.username || '?').charAt(0).toUpperCase() }}
+                </span>
+                <span>{{ v.owner.username }}</span>
+              </RouterLink>
+              <p v-if="v.description" class="result-desc">{{ v.description }}</p>
+            </div>
+          </div>
         </div>
+
+        <!-- Empty state -->
         <div v-else-if="!result.channels.length" class="empty-state">
-          <h2>No results found</h2>
-          <p>Try a different search term.</p>
+          <SearchIcon :size="48" />
+          <h2>Ничего не найдено</h2>
+          <p>Попробуйте другие ключевые слова.</p>
         </div>
       </section>
     </template>
 
     <div v-else-if="!error && !query" class="empty-state">
-      <h2>Type something to search</h2>
-      <p>Use the search bar above to find videos and channels.</p>
+      <SearchIcon :size="48" />
+      <h2>Введите поисковый запрос</h2>
+      <p>Используйте строку поиска вверху страницы, чтобы найти видео и каналы.</p>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* ---- Result rows ---- */
+.result-list {
+  display: flex;
+  flex-direction: column;
+  max-width: 1100px;
+}
+
+.result-row {
+  display: flex;
+  gap: 16px;
+  padding: 16px 0;
+  align-items: flex-start;
+}
+
+.result-thumb-link {
+  flex-shrink: 0;
+  width: 360px;
+  max-width: 100%;
+}
+
+.result-thumb-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.result-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.result-duration {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.result-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-title {
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 24px;
+  color: var(--text);
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.result-meta {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-2);
+}
+
+.result-channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  text-decoration: none;
+  margin-top: 4px;
+  width: fit-content;
+}
+
+.result-channel:hover {
+  color: var(--text);
+}
+
+.result-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.result-desc {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-width: 792px) {
+  .result-row {
+    flex-direction: column;
+  }
+
+  .result-thumb-link {
+    width: 100%;
+  }
+}
+
+/* ---- Channels ---- */
 .channels-section {
-  margin-bottom: 28px;
+  margin-bottom: 16px;
 }
 
 .section-title {
-  font-size: 15px;
-  color: var(--text-secondary);
-  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  margin: 8px 0 12px;
 }
 
 .channel-list {
@@ -137,33 +308,28 @@ watch(
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
 .channel-row {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 10px 14px;
-  border-radius: 12px;
+  padding: 12px 0;
   color: var(--text);
+  text-decoration: none;
 }
 
-.channel-row:hover {
-  background: var(--bg-elevated);
-}
-
-.avatar {
+.channel-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--bg-elevated);
-  color: var(--text);
-  font-weight: 600;
-  font-size: 22px;
+  font-size: 20px;
+  font-weight: 500;
   flex-shrink: 0;
   user-select: none;
 }
@@ -171,56 +337,53 @@ watch(
 .channel-text {
   display: flex;
   flex-direction: column;
-  min-width: 0;
 }
 
 .channel-name {
-  font-weight: 600;
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 500;
 }
 
 .channel-meta {
-  color: var(--text-secondary);
-  font-size: 13px;
+  color: var(--text-2);
+  font-size: 12px;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px 16px;
+/* ---- Empty state ---- */
+.empty-state svg {
+  color: var(--text-2);
+  margin-bottom: 12px;
 }
 
-/* Skeletons */
-.channel-skeleton {
+/* ---- Skeletons ---- */
+.result-row-skeleton {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 20px;
-  max-width: 360px;
+  gap: 16px;
+  padding: 16px 0;
+  max-width: 1100px;
 }
 
-.avatar-skeleton {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+.thumb-skeleton {
+  width: 360px;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  flex-shrink: 0;
 }
 
-.channel-skeleton .line-skeleton {
+.result-row-skeleton-lines {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.result-row-skeleton-lines .line-skeleton {
   height: 16px;
 }
 
-.card-skeleton .thumb-skeleton {
-  aspect-ratio: 16 / 9;
-  border-radius: 12px;
-}
-
-.card-skeleton .line-skeleton {
-  height: 14px;
-  margin-top: 10px;
-}
-
-.card-skeleton .line-skeleton.short {
+.result-row-skeleton-lines .line-skeleton.short {
   width: 60%;
 }
 </style>

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { Pencil, Trash2, VideoOff } from 'lucide-vue-next'
 import { api, extractError } from '../api/client'
 import type { components } from '../api/schema'
-import { formatViews } from '../utils/format'
-import { formatDuration } from '../utils/format'
+import { useToast } from '../composables/useToast'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { formatDuration, formatViews } from '../utils/format'
 
 type VideoOut = components['schemas']['VideoOut']
 type VideoShareOut = components['schemas']['VideoShareOut']
@@ -29,7 +31,10 @@ const videos = ref<VideoRow[]>([])
 const posterFailed = ref<Record<string, boolean>>({})
 const loading = ref(true)
 const error = ref('')
-const message = ref('')
+const toast = useToast()
+
+// Pending row for the delete confirmation dialog.
+const deleteTarget = ref<VideoRow | null>(null)
 
 const page = ref(1)
 const pages = ref(1)
@@ -59,7 +64,7 @@ async function load() {
     params: { query: { page: page.value, page_size: 20 } },
   })
   if (err || !data) {
-    error.value = extractError(err, 'Failed to load your videos')
+    error.value = extractError(err, 'Не удалось загрузить ваши видео')
     videos.value = []
     loading.value = false
     return
@@ -83,7 +88,6 @@ function startEdit(v: VideoRow) {
   v.editDescription = v.description ?? ''
   v.editVisibility = (v.visibility as Visibility) ?? 'public'
   v.editing = true
-  message.value = ''
   error.value = ''
   loadShares(v)
 }
@@ -97,7 +101,7 @@ async function loadShares(v: VideoRow) {
   })
   v.sharesLoading = false
   if (err || !data) {
-    v.shareError = extractError(err, 'Failed to load shares')
+    v.shareError = extractError(err, 'Не удалось загрузить список доступа')
     return
   }
   v.shares = data
@@ -114,7 +118,7 @@ async function addShare(v: VideoRow) {
   })
   v.shareBusy = false
   if (err || !data) {
-    v.shareError = extractError(err, 'Failed to add share')
+    v.shareError = extractError(err, 'Не удалось открыть доступ')
     return
   }
   v.shares.push(data)
@@ -129,7 +133,7 @@ async function removeShare(v: VideoRow, share: VideoShareOut) {
   })
   v.shareBusy = false
   if (err) {
-    v.shareError = extractError(err, 'Failed to remove share')
+    v.shareError = extractError(err, 'Не удалось закрыть доступ')
     return
   }
   v.shares = v.shares.filter((s) => s.id !== share.id)
@@ -151,41 +155,49 @@ async function saveEdit(v: VideoRow) {
   })
   v.saving = false
   if (err) {
-    error.value = extractError(err, 'Failed to update video')
+    toast.push(extractError(err, 'Не удалось обновить видео'))
     return
   }
   v.title = v.editTitle.trim() || v.title
   v.description = v.editDescription
   v.visibility = v.editVisibility
   v.editing = false
-  message.value = 'Video updated'
-  error.value = ''
+  toast.push('Видео обновлено')
 }
 
-async function removeVideo(v: VideoRow) {
-  if (!confirm(`Delete "${v.title}"? This cannot be undone.`)) return
+// ---- Delete: ConfirmDialog instead of window.confirm ----
+
+function askDelete(v: VideoRow) {
+  error.value = ''
+  deleteTarget.value = v
+}
+
+async function confirmDelete() {
+  const v = deleteTarget.value
+  deleteTarget.value = null
+  if (!v) return
   v.deleting = true
   const { error: err } = await api.DELETE('/api/videos/{video_id}', {
     params: { path: { video_id: v.id } },
   })
   v.deleting = false
   if (err) {
-    error.value = extractError(err, 'Failed to delete video')
+    toast.push(extractError(err, 'Не удалось удалить видео'))
     return
   }
   videos.value = videos.value.filter((row) => row.id !== v.id)
   total.value = Math.max(0, total.value - 1)
-  message.value = 'Video deleted'
+  toast.push('Видео удалено')
 }
 
 const visibilityLabel: Record<Visibility, string> = {
-  public: 'Public',
-  unlisted: 'Unlisted',
-  private: 'Private',
+  public: 'Публичное',
+  private: 'Приватное',
+  unlisted: 'По ссылке',
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleDateString('ru-RU', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -197,134 +209,151 @@ onMounted(load)
 
 <template>
   <div class="page">
-    <h1 class="page-title">Your videos</h1>
+    <h1 class="page-title">Мои видео</h1>
 
-    <div v-if="error" class="banner error-banner">
-      {{ error }}
-      <button class="btn retry-btn" @click="load">Retry</button>
-    </div>
-    <div v-if="message" class="banner ok-banner">{{ message }}</div>
-
-    <div v-if="loading" class="skeletons">
-      <div v-for="n in 3" :key="n" class="video-skeleton card">
-        <div class="line-skeleton thumb-skeleton"></div>
-        <div class="line-skeleton w60"></div>
-        <div class="line-skeleton w40"></div>
-      </div>
+    <!-- Error state -->
+    <div v-if="error" class="load-error">
+      <p>{{ error }}</p>
+      <button class="btn" type="button" @click="load">Повторить</button>
     </div>
 
-    <div v-else-if="videos.length === 0" class="empty card">
-      <p class="empty-title">No videos yet.</p>
-      <p class="empty-hint">Videos you upload will appear here.</p>
-      <RouterLink to="/upload" class="btn primary-btn">Upload a video</RouterLink>
-    </div>
-
-    <div v-else class="video-list">
-      <div v-for="v in videos" :key="v.id" class="video-row card">
-        <RouterLink :to="{ name: 'watch', params: { id: v.id } }" class="thumb-wrap">
-          <img
-            v-if="!posterFailed[v.id]"
-            :src="`/api/videos/${v.id}/poster`"
-            :alt="v.title"
-            class="thumb"
-            loading="lazy"
-            @error="posterFailed[v.id] = true"
-          />
-          <div v-else class="thumb thumb-placeholder">▶</div>
-          <span class="duration">{{ formatDuration(v.duration_seconds) }}</span>
-        </RouterLink>
-
-        <div class="row-body">
-          <template v-if="!v.editing">
-            <div class="row-head">
-              <RouterLink
-                :to="{ name: 'watch', params: { id: v.id } }"
-                class="row-title"
-              >{{ v.title }}</RouterLink>
-              <span class="visibility-badge">
-                {{ visibilityLabel[v.visibility as Visibility] ?? v.visibility }}
-              </span>
-            </div>
-            <p class="row-desc">{{ v.description || 'No description' }}</p>
-            <p class="row-meta">
-              {{ formatViews(v.views) }} · {{ formatDate(v.created_at) }}
-              <span v-if="v.status && v.status !== 'ready'"> · {{ v.status }}</span>
-            </p>
-            <div class="row-actions">
-              <button class="btn" @click="startEdit(v)">Edit</button>
-              <button class="btn danger-btn" :disabled="v.deleting" @click="removeVideo(v)">
-                {{ v.deleting ? 'Deleting…' : 'Delete' }}
-              </button>
-            </div>
-          </template>
-
-          <template v-else>
-            <form class="edit-form" @submit.prevent="saveEdit(v)">
-              <label class="field">
-                <span class="field-label">Title</span>
-                <input v-model="v.editTitle" type="text" maxlength="150" />
-              </label>
-              <label class="field">
-                <span class="field-label">Description</span>
-                <textarea v-model="v.editDescription" rows="3"></textarea>
-              </label>
-              <label class="field">
-                <span class="field-label">Visibility</span>
-                <select v-model="v.editVisibility">
-                  <option value="public">Public</option>
-                  <option value="unlisted">Unlisted</option>
-                  <option value="private">Private</option>
-                </select>
-              </label>
-              <div class="edit-actions">
-                <button class="btn primary-btn" type="submit" :disabled="v.saving">
-                  {{ v.saving ? 'Saving…' : 'Save' }}
-                </button>
-                <button class="btn" type="button" @click="cancelEdit(v)">Cancel</button>
-              </div>
-
-              <div class="shares-section">
-                <h3 class="shares-title">Shares</h3>
-                <p class="shares-hint">
-                  People who can watch this video when it is private or unlisted.
-                </p>
-                <div v-if="v.sharesLoading" class="shares-loading">Loading shares…</div>
-                <p v-else-if="v.shares.length === 0" class="shares-empty">
-                  Not shared with anyone yet.
-                </p>
-                <ul v-else class="shares-list">
-                  <li v-for="s in v.shares" :key="s.id" class="share-item">
-                    <span class="share-user">{{ s.user?.username ?? s.user_id }}</span>
-                    <button
-                      class="btn danger-btn"
-                      :disabled="v.shareBusy"
-                      @click="removeShare(v, s)"
-                    >Remove</button>
-                  </li>
-                </ul>
-                <p v-if="v.shareError" class="share-error">{{ v.shareError }}</p>
-                <form class="share-add" @submit.prevent="addShare(v)">
-                  <input
-                    v-model="v.shareUsername"
-                    type="text"
-                    placeholder="Username to share with"
-                  />
-                  <button class="btn" type="submit" :disabled="v.shareBusy || !v.shareUsername.trim()">
-                    Add
-                  </button>
-                </form>
-              </div>
-            </form>
-          </template>
+    <!-- Loading: rows matching real geometry -->
+    <div v-if="loading" class="skeletons" aria-hidden="true">
+      <div v-for="n in 4" :key="n" class="video-row row-skeleton">
+        <div class="thumb-skeleton"></div>
+        <div class="row-info">
+          <div class="line-skeleton w60"></div>
+          <div class="line-skeleton w40"></div>
         </div>
       </div>
     </div>
 
-    <div v-if="pages > 1" class="pager">
-      <button class="btn" :disabled="page <= 1" @click="goTo(page - 1)">Previous</button>
-      <span class="pager-info">Page {{ page }} of {{ pages }}</span>
-      <button class="btn" :disabled="page >= pages" @click="goTo(page + 1)">Next</button>
+    <!-- Empty state -->
+    <div v-else-if="videos.length === 0" class="empty-state">
+      <VideoOff class="lucide-icon" :size="48" />
+      <p>У вас пока нет видео</p>
+      <RouterLink to="/upload" class="btn btn-accent">Загрузить видео</RouterLink>
     </div>
+
+    <div v-else class="video-list">
+      <div v-for="v in videos" :key="v.id" class="video-row">
+        <template v-if="!v.editing">
+          <RouterLink class="thumb-link" :to="`/watch/${v.id}`">
+            <div class="thumb">
+              <img
+                v-if="!posterFailed[v.id]"
+                :src="`/api/videos/${v.id}/poster`"
+                alt=""
+                loading="lazy"
+                @error="posterFailed[v.id] = true"
+              />
+              <span
+                v-if="v.duration_seconds"
+                class="duration"
+              >{{ formatDuration(v.duration_seconds) }}</span>
+            </div>
+          </RouterLink>
+
+          <div class="row-info">
+            <RouterLink class="title-link" :to="`/watch/${v.id}`">
+              <h3 class="row-title">{{ v.title }}</h3>
+            </RouterLink>
+            <p class="row-meta">
+              <span class="visibility-pill">{{ visibilityLabel[v.visibility as Visibility] ?? v.visibility }}</span>
+              <span>{{ formatViews(v.views) }} · {{ formatDate(v.created_at) }}</span>
+            </p>
+            <div class="row-actions">
+              <button class="btn btn-ghost" type="button" @click="startEdit(v)">
+                <Pencil class="lucide-icon" :size="16" />
+                Редактировать
+              </button>
+              <button
+                class="icon-btn delete-btn"
+                type="button"
+                title="Удалить"
+                :disabled="v.deleting"
+                @click="askDelete(v)"
+              >
+                <Trash2 class="lucide-icon" :size="18" />
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <!-- Inline edit form -->
+        <form v-else class="edit-form" @submit.prevent="saveEdit(v)">
+          <label class="field">
+            <span>Название</span>
+            <input v-model="v.editTitle" type="text" required />
+          </label>
+          <label class="field">
+            <span>Описание</span>
+            <textarea v-model="v.editDescription" rows="3"></textarea>
+          </label>
+          <label class="field">
+            <span>Доступ</span>
+            <select v-model="v.editVisibility">
+              <option value="public">Публичное</option>
+              <option value="private">Приватное</option>
+              <option value="unlisted">По ссылке</option>
+            </select>
+          </label>
+
+          <!-- Shares section -->
+          <div class="shares">
+            <p class="shares-title">Общий доступ</p>
+            <p v-if="v.sharesLoading" class="shares-hint">Загрузка…</p>
+            <p v-else-if="v.shares.length === 0" class="shares-hint">
+              Видео доступно по ссылке. Добавьте пользователей, чтобы открыть доступ.
+            </p>
+            <ul v-else class="share-list">
+              <li v-for="s in v.shares" :key="s.id" class="share-item">
+                <span class="share-user">{{ s.user?.username ?? s.user_id }}</span>
+                <button
+                  class="btn btn-ghost"
+                  type="button"
+                  :disabled="v.shareBusy"
+                  @click="removeShare(v, s)"
+                >Закрыть доступ</button>
+              </li>
+            </ul>
+            <p v-if="v.shareError" class="share-error">{{ v.shareError }}</p>
+            <form class="share-add" @submit.prevent="addShare(v)">
+              <input
+                v-model="v.shareUsername"
+                type="text"
+                placeholder="Имя пользователя"
+              />
+              <button class="btn" type="submit" :disabled="v.shareBusy || !v.shareUsername.trim()">
+                Добавить
+              </button>
+            </form>
+          </div>
+
+          <div class="edit-actions">
+            <button class="btn btn-accent" type="submit" :disabled="v.saving">Сохранить</button>
+            <button class="btn" type="button" @click="cancelEdit(v)">Отмена</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div v-if="pages > 1" class="pager">
+      <button class="btn" :disabled="page <= 1" @click="goTo(page - 1)">Предыдущая</button>
+      <span class="pager-info">Страница {{ page }} из {{ pages }}</span>
+      <button class="btn" :disabled="page >= pages" @click="goTo(page + 1)">Следующая</button>
+    </div>
+
+    <ConfirmDialog
+      :open="!!deleteTarget"
+      title="Удалить видео"
+      :message="deleteTarget
+        ? `«${deleteTarget.title}» будет удалён безвозвратно.`
+        : 'Видео будет удалено безвозвратно.'"
+      confirm-text="Удалить"
+      @confirm="confirmDelete"
+      @cancel="deleteTarget = null"
+    />
   </div>
 </template>
 
@@ -335,201 +364,145 @@ onMounted(load)
   padding: 24px 16px 48px;
 }
 
-.banner {
-  padding: 10px 14px;
-  border-radius: 8px;
-  margin-bottom: 12px;
-  font-size: 13px;
+.page-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 16px;
 }
 
-.error-banner {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  color: var(--danger);
-  border: 1px solid var(--danger);
-}
-
-.ok-banner {
-  background: color-mix(in srgb, #2e7d32 12%, transparent);
-  border: 1px solid #2e7d32;
-}
-
-.skeletons {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-
-.video-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-}
-
-.line-skeleton {
-  height: 12px;
-  border-radius: 6px;
-  background: linear-gradient(
-    90deg,
-    var(--skeleton) 25%,
-    var(--skeleton-shine) 50%,
-    var(--skeleton) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite linear;
-}
-
-.thumb-skeleton {
-  height: 90px;
-  border-radius: 8px;
-}
-
-.w60 { width: 60%; }
-.w40 { width: 40%; }
-
-@keyframes shimmer {
-  from { background-position: 200% 0; }
-  to { background-position: -200% 0; }
-}
-
-.empty {
-  padding: 40px 16px;
-  text-align: center;
-  color: var(--text-secondary);
-}
-
-.empty-title {
-  color: var(--text);
-  font-size: 16px;
-  margin: 0 0 4px;
-}
-
-.empty-hint {
-  margin: 0 0 16px;
-}
-
+/* ---- Video rows: thumb 168x94 + info ---- */
 .video-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
 
 .video-row {
   display: flex;
-  gap: 14px;
-  padding: 12px;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--divider);
 }
 
-.thumb-wrap {
-  position: relative;
-  flex: 0 0 160px;
+.thumb-link {
+  flex-shrink: 0;
 }
 
 .thumb {
-  width: 160px;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
+  position: relative;
+  width: 168px;
+  height: 94px;
   border-radius: 8px;
-  background: var(--skeleton);
+  overflow: hidden;
+  background: var(--surface);
 }
 
-.thumb-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .duration {
   position: absolute;
   right: 4px;
   bottom: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
   background: rgba(0, 0, 0, 0.8);
   color: #fff;
   font-size: 11px;
-  padding: 1px 4px;
-  border-radius: 4px;
+  font-weight: 600;
 }
 
-.row-body {
-  flex: 1;
+.row-info {
   min-width: 0;
-}
-
-.row-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex: 1;
 }
 
 .row-title {
-  color: var(--text);
-  font-weight: 600;
-  text-decoration: none;
-  font-size: 15px;
-}
-
-.row-title:hover {
-  text-decoration: underline;
-}
-
-.visibility-badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-}
-
-.row-desc {
-  margin: 4px 0;
-  color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
+.title-link {
+  color: var(--text);
+}
+
 .row-meta {
-  margin: 0 0 8px;
-  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--text-2);
   font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Visibility: small outlined text pill, no saturated fill. */
+.visibility-pill {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--divider);
+  color: var(--text-2);
+  white-space: nowrap;
 }
 
 .row-actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
 }
 
-.edit-form .field {
+.delete-btn {
+  color: var(--text-2);
+}
+
+.delete-btn:hover {
+  color: var(--danger);
+}
+
+/* ---- Inline edit form ---- */
+.edit-form {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  margin-bottom: 10px;
+  gap: 12px;
 }
 
-.field-label {
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field span {
   font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 4px;
+  color: var(--text-2);
 }
 
-.edit-form input,
-.edit-form textarea,
-.edit-form select {
-  background: var(--input-bg);
-  border: 1px solid var(--border);
+.field input,
+.field textarea,
+.field select {
+  background: var(--bg);
+  border: 1px solid var(--divider);
   color: var(--text);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   font: inherit;
+  font-size: 14px;
+}
+
+.field textarea {
+  resize: vertical;
 }
 
 .edit-actions {
@@ -537,29 +510,30 @@ onMounted(load)
   gap: 8px;
 }
 
-.shares-section {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
+/* ---- Shares ---- */
+.shares {
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .shares-title {
-  font-size: 14px;
-  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
-.shares-hint,
-.shares-empty,
-.shares-loading {
-  color: var(--text-secondary);
+.shares-hint {
+  color: var(--text-2);
   font-size: 12px;
-  margin: 0 0 8px;
 }
 
-.shares-list {
+.share-list {
   list-style: none;
-  margin: 0 0 8px;
   padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -580,7 +554,7 @@ onMounted(load)
 .share-error {
   color: var(--danger);
   font-size: 12px;
-  margin: 0 0 8px;
+  margin: 0;
 }
 
 .share-add {
@@ -590,8 +564,8 @@ onMounted(load)
 
 .share-add input {
   flex: 1;
-  background: var(--input-bg);
-  border: 1px solid var(--border);
+  background: var(--bg);
+  border: 1px solid var(--divider);
   color: var(--text);
   border-radius: 8px;
   padding: 6px 10px;
@@ -599,38 +573,77 @@ onMounted(load)
   font-size: 13px;
 }
 
-.btn {
-  background: var(--bg-elevated);
-  color: var(--text);
-  border: 1px solid var(--border);
-  padding: 6px 14px;
-  border-radius: 18px;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
+/* ---- Empty / error states ---- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 64px 16px;
+  color: var(--text-2);
+  text-align: center;
 }
 
-.btn:disabled {
-  opacity: 0.6;
-  cursor: default;
+.empty-state .btn {
+  margin-top: 4px;
 }
 
-.btn:hover:not(:disabled) {
-  background: var(--bg-hover);
+.load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 64px 16px;
+  color: var(--text-2);
+  text-align: center;
 }
 
-.primary-btn {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+.load-error p {
+  max-width: 480px;
 }
 
-.primary-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
+/* ---- Skeletons: same geometry as real rows ---- */
+.thumb-skeleton {
+  width: 168px;
+  height: 94px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--surface-hover) 50%,
+    var(--surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
 }
 
-.danger-btn {
-  color: var(--danger);
+.row-skeleton .row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.line-skeleton {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--surface-hover) 50%,
+    var(--surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+.w60 { width: 60%; }
+.w40 { width: 40%; }
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
 }
 
 .pager {
@@ -642,7 +655,19 @@ onMounted(load)
 }
 
 .pager-info {
-  color: var(--text-secondary);
+  color: var(--text-2);
   font-size: 13px;
+}
+
+@media (max-width: 560px) {
+  .thumb {
+    width: 128px;
+    height: 72px;
+  }
+
+  .thumb-skeleton {
+    width: 128px;
+    height: 72px;
+  }
 }
 </style>

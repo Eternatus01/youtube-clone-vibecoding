@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { api } from '../api/client'
+import { RouterLink, useRoute } from 'vue-router'
+import { ChevronDown, ChevronUp, ListVideo, X } from 'lucide-vue-next'
+import { api, extractError } from '../api/client'
 import type { components } from '../api/schema'
 import { useAuthStore } from '../stores/auth'
-import { formatDuration, formatViews, timeAgo } from '../utils/format'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { formatDuration, formatViews } from '../utils/format'
 
 type PlaylistDetail = components['schemas']['PlaylistDetail']
 type PlaylistItemOut = components['schemas']['PlaylistItemOut']
@@ -16,6 +18,10 @@ const playlist = ref<PlaylistDetail | null>(null)
 const loading = ref(true)
 const error = ref('')
 const actionError = ref('')
+const posterFailed = ref<Record<string, boolean>>({})
+
+// Pending item for the remove confirmation dialog.
+const removeTarget = ref<PlaylistItemOut | null>(null)
 
 const playlistId = computed(() => String(route.params.id))
 const isOwner = computed(
@@ -30,7 +36,7 @@ async function load() {
     params: { path: { playlist_id: id } },
   })
   if (apiError || !data) {
-    error.value = 'Playlist not found or unavailable.'
+    error.value = extractError(apiError, 'Не удалось загрузить плейлист')
     playlist.value = null
   } else {
     playlist.value = data
@@ -51,7 +57,7 @@ async function removeItem(item: PlaylistItemOut) {
     },
   )
   if (apiError) {
-    actionError.value = 'Failed to remove item.'
+    actionError.value = extractError(apiError, 'Не удалось удалить видео из плейлиста')
     return
   }
   playlist.value = {
@@ -59,6 +65,17 @@ async function removeItem(item: PlaylistItemOut) {
     items: playlist.value.items.filter((i) => i.id !== item.id),
     item_count: Math.max(0, playlist.value.item_count - 1),
   }
+}
+
+function askRemove(item: PlaylistItemOut) {
+  actionError.value = ''
+  removeTarget.value = item
+}
+
+async function confirmRemove() {
+  const item = removeTarget.value
+  removeTarget.value = null
+  if (item) await removeItem(item)
 }
 
 async function moveItem(item: PlaylistItemOut, delta: number) {
@@ -84,135 +101,188 @@ async function moveItem(item: PlaylistItemOut, delta: number) {
     },
   )
   if (apiError) {
-    actionError.value = 'Failed to move item.'
+    actionError.value = extractError(apiError, 'Не удалось изменить порядок')
     await load() // Resync from server.
   }
 }
 
 onMounted(load)
-watch(
-  () => route.params.id,
-  () => {
-    if (route.name === 'playlist' && route.params.id) load()
-  },
-)
+watch(playlistId, load)
 </script>
 
 <template>
-  <div class="page playlist-page">
-    <div v-if="error" class="error-banner">
-      {{ error }}
-      <button class="btn retry-btn" @click="load">Retry</button>
+  <div class="page">
+    <!-- Loading: header + item rows matching real geometry -->
+    <div v-if="loading" aria-hidden="true">
+      <div class="playlist-header">
+        <div class="line-skeleton w40"></div>
+        <div class="line-skeleton w60"></div>
+        <div class="line-skeleton short"></div>
+      </div>
+      <div class="item-list">
+        <div v-for="n in 6" :key="n" class="item item-skeleton">
+          <span class="index">{{ n }}</span>
+          <div class="thumb-skeleton"></div>
+          <div class="item-info">
+            <div class="line-skeleton w60"></div>
+            <div class="line-skeleton w40"></div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div v-if="actionError" class="error-banner">{{ actionError }}</div>
 
-    <div v-if="loading" class="loading">
-      <div class="skeleton line-skeleton"></div>
-      <div class="skeleton line-skeleton short"></div>
+    <!-- Error -->
+    <div v-else-if="error" class="load-error">
+      <p>{{ error }}</p>
+      <button class="btn" type="button" @click="load">Повторить</button>
     </div>
 
     <template v-else-if="playlist">
-      <div class="playlist-header">
+      <header class="playlist-header">
+        <p class="kicker">Плейлист</p>
         <h1 class="title">{{ playlist.title }}</h1>
         <p class="meta">
-          {{ playlist.item_count }} {{ playlist.item_count === 1 ? 'video' : 'videos' }}
-          <template v-if="playlist.owner"> • by {{ playlist.owner.username }}</template>
-          • Updated {{ timeAgo(playlist.created_at) }}
+          <RouterLink
+            v-if="playlist.owner"
+            :to="`/channel/${playlist.owner_id}`"
+            class="owner-link"
+          >{{ playlist.owner.username }}</RouterLink>
+          <span v-if="playlist.owner"> · </span>
+          <span>{{ playlist.item_count }} видео</span>
         </p>
         <p v-if="playlist.description" class="description">{{ playlist.description }}</p>
-      </div>
+      </header>
+
+      <p v-if="actionError" class="action-error">{{ actionError }}</p>
 
       <ul v-if="playlist.items.length" class="item-list">
         <li v-for="(item, index) in playlist.items" :key="item.id" class="item">
           <span class="index">{{ index + 1 }}</span>
-          <RouterLink
-            :to="{ name: 'watch', params: { id: item.video_id } }"
-            class="item-link"
-          >
+
+          <RouterLink class="thumb-link" :to="`/watch/${item.video_id}`">
             <div class="thumb">
               <img
-                v-if="item.video"
+                v-if="!posterFailed[item.id]"
                 :src="`/api/videos/${item.video_id}/poster`"
-                :alt="item.video.title"
+                alt=""
                 loading="lazy"
+                @error="posterFailed[item.id] = true"
               />
-              <span v-if="item.video && formatDuration(item.video.duration_seconds)" class="duration">
-                {{ formatDuration(item.video.duration_seconds) }}
-              </span>
-            </div>
-            <div class="item-info">
-              <div class="item-title">
-                {{ item.video?.title ?? 'Unavailable video' }}
-              </div>
-              <div class="item-meta">
-                <template v-if="item.video">
-                  {{ item.video.owner?.username ?? 'Unknown channel' }}
-                  <template v-if="item.video.views != null">
-                    • {{ formatViews(item.video.views) }}
-                  </template>
-                </template>
-              </div>
+              <span
+                v-if="item.video?.duration_seconds"
+                class="duration"
+              >{{ formatDuration(item.video.duration_seconds) }}</span>
             </div>
           </RouterLink>
+
+          <div class="item-info">
+            <RouterLink class="title-link" :to="`/watch/${item.video_id}`">
+              <h3 class="item-title">{{ item.video?.title ?? 'Видео' }}</h3>
+            </RouterLink>
+            <RouterLink
+              v-if="item.video?.owner"
+              class="channel-link"
+              :to="`/channel/${item.video.owner_id}`"
+            >{{ item.video.owner.username }}</RouterLink>
+            <p class="item-meta">
+              {{ formatViews(item.video?.views) }}
+              <template v-if="item.video?.duration_seconds">
+                • {{ formatDuration(item.video.duration_seconds) }}
+              </template>
+            </p>
+          </div>
+
           <div v-if="isOwner" class="item-actions">
             <button
               class="icon-btn"
-              title="Move up"
+              title="Переместить вверх"
               :disabled="index === 0"
               @click="moveItem(item, -1)"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z" />
-              </svg>
+              <ChevronUp class="lucide-icon" :size="18" />
             </button>
             <button
               class="icon-btn"
-              title="Move down"
+              title="Переместить вниз"
               :disabled="index === playlist.items.length - 1"
               @click="moveItem(item, 1)"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
-              </svg>
+              <ChevronDown class="lucide-icon" :size="18" />
             </button>
-            <button class="icon-btn remove" title="Remove" @click="removeItem(item)">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-              </svg>
+            <button
+              class="icon-btn remove"
+              title="Удалить из плейлиста"
+              @click="askRemove(item)"
+            >
+              <X class="lucide-icon" :size="18" />
             </button>
           </div>
         </li>
       </ul>
 
       <div v-else class="empty-state">
-        <h2>No videos in this playlist</h2>
-        <p>Items added here will appear in this order.</p>
+        <ListVideo class="lucide-icon" :size="48" />
+        <p>Плейлист пуст</p>
       </div>
     </template>
+
+    <ConfirmDialog
+      :open="!!removeTarget"
+      title="Удалить из плейлиста"
+      :message="removeTarget?.video?.title
+        ? `«${removeTarget.video.title}» будет удалён из плейлиста.`
+        : 'Видео будет удалено из плейлиста.'"
+      confirm-text="Удалить"
+      @confirm="confirmRemove"
+      @cancel="removeTarget = null"
+    />
   </div>
 </template>
 
 <style scoped>
+.page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+/* ---- Header: kicker + name 20/700 + owner + count ---- */
 .playlist-header {
   margin-bottom: 24px;
 }
 
+.kicker {
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 500;
+}
+
 .title {
-  font-size: 24px;
-  margin-bottom: 4px;
+  font-size: 20px;
+  font-weight: 700;
+  margin: 2px 0 4px;
 }
 
 .meta {
-  color: var(--text-secondary);
+  color: var(--text-2);
   font-size: 14px;
+}
+
+.owner-link {
+  color: var(--text-2);
+}
+
+.owner-link:hover {
+  color: var(--text);
 }
 
 .description {
   margin-top: 8px;
-  color: var(--text-secondary);
+  color: var(--text-2);
   white-space: pre-wrap;
 }
 
+/* ---- List items: horizontal row, thumb 168x94 radius 8 ---- */
 .item-list {
   list-style: none;
   padding: 0;
@@ -226,33 +296,28 @@ watch(
   align-items: center;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--divider);
 }
 
 .index {
   width: 24px;
   text-align: center;
-  color: var(--text-secondary);
+  color: var(--text-2);
   font-size: 13px;
   flex-shrink: 0;
 }
 
-.item-link {
-  display: flex;
-  gap: 12px;
-  flex: 1;
-  min-width: 0;
-  color: var(--text);
+.thumb-link {
+  flex-shrink: 0;
 }
 
 .thumb {
   position: relative;
-  width: 160px;
-  aspect-ratio: 16 / 9;
+  width: 168px;
+  height: 94px;
   border-radius: 8px;
   overflow: hidden;
-  background: var(--bg-elevated);
-  flex-shrink: 0;
+  background: var(--surface);
 }
 
 .thumb img {
@@ -276,6 +341,7 @@ watch(
 
 .item-info {
   min-width: 0;
+  flex: 1;
 }
 
 .item-title {
@@ -287,8 +353,23 @@ watch(
   overflow: hidden;
 }
 
+.title-link {
+  color: var(--text);
+}
+
+.channel-link {
+  display: inline-block;
+  color: var(--text-2);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.channel-link:hover {
+  color: var(--text);
+}
+
 .item-meta {
-  color: var(--text-secondary);
+  color: var(--text-2);
   font-size: 12px;
   margin-top: 4px;
 }
@@ -300,19 +381,110 @@ watch(
 }
 
 .item-actions .remove {
-  color: var(--text-secondary);
+  color: var(--text-2);
 }
 
 .item-actions .remove:hover {
   color: var(--danger);
 }
 
-.loading .line-skeleton {
-  height: 18px;
-  margin-top: 12px;
+/* ---- Empty / error ---- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 64px 16px;
+  color: var(--text-2);
+  text-align: center;
 }
 
-.loading .line-skeleton.short {
+.load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 64px 16px;
+  color: var(--text-2);
+  text-align: center;
+}
+
+.load-error p {
+  max-width: 480px;
+}
+
+.action-error {
+  color: var(--danger);
+  font-size: 13px;
+  margin: -12px 0 12px;
+}
+
+/* ---- Skeletons: same geometry as real rows ---- */
+.line-skeleton {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--surface-hover) 50%,
+    var(--surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+.playlist-header .line-skeleton {
+  margin-bottom: 8px;
+}
+
+.playlist-header .line-skeleton:first-child {
+  height: 14px;
+}
+
+.playlist-header .line-skeleton:nth-child(2) {
+  height: 24px;
+  width: 60%;
+}
+
+.playlist-header .line-skeleton.short {
   width: 40%;
+}
+
+.thumb-skeleton {
+  width: 168px;
+  height: 94px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--surface-hover) 50%,
+    var(--surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+.item-skeleton .item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (max-width: 560px) {
+  .thumb {
+    width: 128px;
+    height: 72px;
+  }
+
+  .thumb-skeleton {
+    width: 128px;
+    height: 72px;
+  }
 }
 </style>

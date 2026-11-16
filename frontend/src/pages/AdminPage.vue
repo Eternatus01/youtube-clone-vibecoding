@@ -1,21 +1,33 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { Ban } from 'lucide-vue-next'
 import { api, extractError } from '../api/client'
 import type { components } from '../api/schema'
+import { pluralRu } from '../utils/format'
+import { useToast } from '../composables/useToast'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 type UserOut = components['schemas']['UserOut']
+
+const toast = useToast()
 
 const users = ref<UserOut[]>([])
 const total = ref(0)
 const loading = ref(true)
 const error = ref('')
-const message = ref('')
 
 // Per-user UI state.
 const busy = ref<Record<string, boolean>>({})
 const roleSelect = ref<Record<string, string>>({})
+const pendingDeactivate = ref<UserOut | null>(null)
 
 const ROLES = ['user', 'moderator', 'admin'] as const
+
+const roleLabel: Record<string, string> = {
+  admin: 'админ',
+  moderator: 'модератор',
+  user: 'юзер',
+}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -25,12 +37,15 @@ function formatDate(iso: string): string {
   })
 }
 
+const totalLabel = () =>
+  pluralRu(total.value, ['пользователь', 'пользователя', 'пользователей'])
+
 async function load() {
   loading.value = true
   error.value = ''
   const { data, error: err } = await api.GET('/api/admin/users')
   if (err || !data) {
-    error.value = extractError(err, 'Failed to load users')
+    error.value = extractError(err, 'Не удалось загрузить')
     users.value = []
     total.value = 0
   } else {
@@ -47,37 +62,32 @@ async function changeRole(u: UserOut) {
   const role = roleSelect.value[u.id]
   if (!role || role === u.role) return
   busy.value[u.id] = true
-  error.value = ''
-  message.value = ''
   const { data, error: err } = await api.PATCH('/api/admin/users/role', {
     body: { user_id: u.id, role },
   })
   busy.value[u.id] = false
   if (err || !data) {
-    error.value = extractError(err, 'Failed to change role')
+    toast.push(extractError(err, 'Не удалось изменить роль'))
     roleSelect.value[u.id] = u.role
     return
   }
   u.role = data.role
-  message.value = `Role of ${u.username} changed to ${data.role}`
+  toast.push(`Роль ${u.username}: ${roleLabel[data.role] ?? data.role}`)
 }
 
 async function deactivate(u: UserOut) {
-  if (!confirm(`Deactivate "${u.username}"? They will no longer be able to sign in.`)) return
   busy.value[u.id] = true
-  error.value = ''
-  message.value = ''
   const { error: err } = await api.DELETE('/api/admin/users/{user_id}', {
     params: { path: { user_id: u.id } },
   })
   busy.value[u.id] = false
   if (err) {
-    error.value = extractError(err, 'Failed to deactivate user')
+    toast.push(extractError(err, 'Не удалось деактивировать пользователя'))
     return
   }
   users.value = users.value.filter((row) => row.id !== u.id)
   total.value = Math.max(0, total.value - 1)
-  message.value = `User ${u.username} deactivated`
+  toast.push(`Пользователь ${u.username} деактивирован`)
 }
 
 onMounted(load)
@@ -85,98 +95,253 @@ onMounted(load)
 
 <template>
   <div class="page">
-    <h1 class="page-title">Admin</h1>
-    <p class="subtitle">{{ total }} users</p>
+    <h1 class="page-title">Администрирование</h1>
+    <p class="subtitle">{{ total }} {{ totalLabel() }}</p>
 
-    <div v-if="error" class="banner error-banner">
-      {{ error }}
-      <button class="btn retry-btn" @click="load">Retry</button>
+    <div v-if="error" class="load-error">
+      <span>{{ error }}</span>
+      <button class="retry" type="button" @click="load">Повторить</button>
     </div>
-    <div v-if="message" class="banner ok-banner">{{ message }}</div>
 
-    <div v-if="loading" class="skeletons">
-      <div v-for="n in 3" :key="n" class="card item-skeleton">
-        <div class="line-skeleton w60"></div>
-        <div class="line-skeleton w40"></div>
+    <div v-if="loading" class="table-skeleton">
+      <div v-for="n in 6" :key="n" class="skel-row">
+        <div class="line-skeleton" :class="n % 2 === 0 ? 'w40' : 'w60'"></div>
+        <div class="line-skeleton w30"></div>
       </div>
     </div>
 
-    <div v-else-if="users.length === 0" class="empty card">
-      <p class="empty-title">No users found.</p>
-    </div>
+    <table v-else-if="users.length > 0" class="table">
+      <thead>
+        <tr>
+          <th>Пользователь</th>
+          <th>Email</th>
+          <th>Роль</th>
+          <th>Дата</th>
+          <th>Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="u in users" :key="u.id">
+          <td>
+            <span class="user-name">{{ u.username }}</span>
+            <span class="role-pill" :class="`role-${u.role}`">
+              {{ roleLabel[u.role] ?? u.role }}
+            </span>
+          </td>
+          <td class="cell-email" :title="u.email">{{ u.email }}</td>
+          <td>
+            <select
+              v-model="roleSelect[u.id]"
+              class="role-select"
+              :disabled="busy[u.id]"
+              aria-label="Роль"
+              @change="changeRole(u)"
+            >
+              <option v-for="r in ROLES" :key="r" :value="r">{{ roleLabel[r] ?? r }}</option>
+            </select>
+          </td>
+          <td class="cell-date">{{ formatDate(u.created_at) }}</td>
+          <td>
+            <button
+              class="icon-btn icon-btn--danger"
+              type="button"
+              title="Деактивировать"
+              :disabled="busy[u.id]"
+              @click="pendingDeactivate = u"
+            >
+              <Ban :size="18" :stroke-width="1.75" />
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
 
-    <div v-else class="user-list">
-      <div v-for="u in users" :key="u.id" class="card user-row">
-        <div class="user-main">
-          <p class="user-name">
-            {{ u.username }}
-            <span class="role-badge" :class="u.role">{{ u.role }}</span>
-          </p>
-          <p class="user-meta">{{ u.email }} · joined {{ formatDate(u.created_at) }}</p>
-        </div>
-        <div class="user-actions">
-          <select v-model="roleSelect[u.id]" :disabled="busy[u.id]" @change="changeRole(u)">
-            <option v-for="r in ROLES" :key="r" :value="r">{{ r }}</option>
-          </select>
-          <button
-            class="btn danger-btn"
-            :disabled="busy[u.id]"
-            @click="deactivate(u)"
-          >Deactivate</button>
-        </div>
-      </div>
-    </div>
+    <div v-else-if="!error" class="empty">Нет пользователей</div>
+
+    <ConfirmDialog
+      :open="pendingDeactivate !== null"
+      title="Деактивировать пользователя?"
+      :message="`Пользователь «${pendingDeactivate?.username ?? ''}» больше не сможет войти в аккаунт.`"
+      confirm-text="Деактивировать"
+      @confirm="deactivate(pendingDeactivate!); pendingDeactivate = null"
+      @cancel="pendingDeactivate = null"
+    />
   </div>
 </template>
 
 <style scoped>
 .page {
-  max-width: 900px;
+  max-width: 980px;
   margin: 0 auto;
   padding: 24px 16px 48px;
 }
 
+.page-title {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+
 .subtitle {
-  color: var(--text-secondary);
+  margin: 0;
   font-size: 13px;
-  margin: -12px 0 16px;
+  color: var(--text-2);
 }
 
-.banner {
-  padding: 10px 14px;
-  border-radius: 8px;
-  margin-bottom: 12px;
-  font-size: 13px;
-}
-
-.error-banner {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  color: var(--danger);
-  border: 1px solid var(--danger);
-}
-
-.ok-banner {
-  background: color-mix(in srgb, #2e7d32 12%, transparent);
-  border: 1px solid #2e7d32;
-}
-
-.card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-
-.skeletons {
+/* ---- Load error ---- */
+.load-error {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 12px;
+  margin: 20px 0;
+  font-size: 13px;
+  color: var(--danger);
 }
 
-.item-skeleton {
-  padding: 16px;
+.retry {
+  background: none;
+  border: 1px solid var(--divider);
+  color: var(--text);
+  padding: 4px 14px;
+  border-radius: 16px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.retry:hover {
+  background: var(--surface-hover);
+}
+
+/* ---- Dense table ---- */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 24px;
+}
+
+.table th {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 5;
+  background: var(--bg);
+  height: 36px;
+  padding: 0 12px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--divider);
+  white-space: nowrap;
+}
+
+.table td {
+  height: 48px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--divider);
+  font-size: 13px;
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.user-name {
+  font-size: 14px;
+  color: var(--text);
+  margin-right: 8px;
+}
+
+/* ---- Role pill ---- */
+.role-pill {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--divider);
+  color: var(--text-2);
+  vertical-align: middle;
+}
+
+.role-pill.role-admin {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.role-pill.role-moderator {
+  color: #2e7d32;
+  border-color: #2e7d32;
+}
+
+.cell-email {
+  max-width: 200px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-date {
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.role-select {
+  background: var(--bg);
+  border: 1px solid var(--divider);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.role-select:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---- Icon button ---- */
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.icon-btn--danger {
+  color: var(--danger);
+}
+
+.icon-btn--danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---- States ---- */
+.table-skeleton {
+  margin-top: 24px;
+}
+
+.skel-row {
+  height: 48px;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--divider);
 }
 
 .line-skeleton {
@@ -184,9 +349,9 @@ onMounted(load)
   border-radius: 6px;
   background: linear-gradient(
     90deg,
-    var(--skeleton) 25%,
-    var(--skeleton-shine) 50%,
-    var(--skeleton) 75%
+    var(--surface) 25%,
+    var(--surface-hover) 50%,
+    var(--surface) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite linear;
@@ -194,6 +359,7 @@ onMounted(load)
 
 .w60 { width: 60%; }
 .w40 { width: 40%; }
+.w30 { width: 30%; }
 
 @keyframes shimmer {
   from { background-position: 200% 0; }
@@ -203,106 +369,7 @@ onMounted(load)
 .empty {
   padding: 40px 16px;
   text-align: center;
-  color: var(--text-secondary);
-}
-
-.empty-title {
-  color: var(--text);
-  font-size: 16px;
-  margin: 0;
-}
-
-.user-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.user-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  flex-wrap: wrap;
-}
-
-.user-main {
-  min-width: 0;
-}
-
-.user-name {
-  margin: 0 0 2px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.role-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-}
-
-.role-badge.admin {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.role-badge.moderator {
-  color: #2e7d32;
-  border-color: #2e7d32;
-}
-
-.user-meta {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.user-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.user-actions select {
-  background: var(--input-bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font: inherit;
-  font-size: 13px;
-}
-
-.btn {
-  background: var(--bg-elevated);
-  color: var(--text);
-  border: 1px solid var(--border);
-  padding: 6px 14px;
-  border-radius: 18px;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.danger-btn {
-  color: var(--danger);
+  color: var(--text-2);
+  font-size: 14px;
 }
 </style>

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { ListVideo, VideoOff } from 'lucide-vue-next'
 import { api } from '../api/client'
 import type { components } from '../api/schema'
 import { useAuthStore } from '../stores/auth'
 import VideoCard from '../components/VideoCard.vue'
-import { formatViews, timeAgo } from '../utils/format'
+import { formatSubscribers, timeAgo } from '../utils/format'
 
 type ChannelOut = components['schemas']['ChannelOut']
 type VideoOut = components['schemas']['VideoOut']
@@ -39,7 +40,7 @@ async function load() {
     params: { path: { channel_id: id } },
   })
   if (apiError || !data) {
-    error.value = 'Channel not found.'
+    error.value = 'Канал не найден.'
     loading.value = false
     return
   }
@@ -120,41 +121,50 @@ watch(
   <div class="page channel-page">
     <div v-if="error" class="error-banner">
       {{ error }}
-      <button class="btn retry-btn" @click="load">Retry</button>
+      <button class="btn retry-btn" @click="load">Повторить</button>
     </div>
 
-    <div v-if="loading" class="header-skeleton">
-      <div class="skeleton avatar-skeleton"></div>
-      <div class="header-skeleton-lines">
-        <div class="skeleton line-skeleton"></div>
-        <div class="skeleton line-skeleton short"></div>
+    <div v-if="loading" class="channel-skeleton">
+      <div class="skeleton banner-skeleton"></div>
+      <div class="head-skeleton">
+        <div class="skeleton avatar-skeleton"></div>
+        <div class="head-skeleton-lines">
+          <div class="skeleton line-skeleton"></div>
+          <div class="skeleton line-skeleton short"></div>
+        </div>
+      </div>
+      <div class="grid">
+        <div v-for="n in 8" :key="n" class="card-skeleton">
+          <div class="skeleton thumb-skeleton"></div>
+          <div class="skeleton line-skeleton"></div>
+        </div>
       </div>
     </div>
 
     <template v-else-if="channel">
-      <div class="channel-header">
-        <span class="avatar avatar-large">
+      <!-- Banner 16:5, neutral surface -->
+      <div class="banner"></div>
+
+      <div class="channel-head">
+        <span class="avatar avatar-128">
           {{ (channel.username || '?').charAt(0).toUpperCase() }}
         </span>
         <div class="channel-info">
           <h1 class="channel-name">{{ channel.username }}</h1>
           <p class="channel-meta">
-            {{ formatViews(channel.subscriber_count).replace(' views', ' subscribers') }}
-            • {{ channel.video_count }} {{ channel.video_count === 1 ? 'video' : 'videos' }}
-            • Joined {{ timeAgo(channel.created_at) }}
-          </p>
-          <p v-if="channel.is_subscribed" class="channel-subscribed">
-            You are subscribed
+            <span class="handle">@{{ channel.username }}</span>
+            • {{ formatSubscribers(channel.subscriber_count) }}
+            • {{ channel.video_count }} видео
           </p>
         </div>
         <button
           v-if="canSubscribe"
-          class="btn subscribe-btn"
+          class="pill subscribe-pill"
           :class="{ subscribed: channel.is_subscribed }"
           :disabled="subscribePending"
           @click="toggleSubscribe"
         >
-          {{ channel.is_subscribed ? 'Subscribed' : 'Subscribe' }}
+          {{ channel.is_subscribed ? 'Вы подписаны' : 'Подписаться' }}
         </button>
       </div>
 
@@ -166,7 +176,7 @@ watch(
           :aria-selected="tab === 'videos'"
           @click="setTab('videos')"
         >
-          Videos
+          Видео
         </button>
         <button
           class="tab"
@@ -175,12 +185,12 @@ watch(
           :aria-selected="tab === 'playlists'"
           @click="setTab('playlists')"
         >
-          Playlists
+          Плейлисты
         </button>
       </div>
 
       <div v-if="tabLoading" class="grid">
-        <div v-for="n in 6" :key="n" class="card-skeleton">
+        <div v-for="n in 8" :key="n" class="card-skeleton">
           <div class="skeleton thumb-skeleton"></div>
           <div class="skeleton line-skeleton"></div>
         </div>
@@ -191,8 +201,9 @@ watch(
           <VideoCard v-for="v in videos" :key="v.id" :video="v" />
         </div>
         <div v-else class="empty-state">
-          <h2>No videos yet</h2>
-          <p>This channel hasn't uploaded anything.</p>
+          <VideoOff :size="48" />
+          <h2>Нет видео</h2>
+          <p>На этом канале пока нет загруженных видео.</p>
         </div>
       </template>
 
@@ -204,23 +215,21 @@ watch(
               class="playlist-link"
             >
               <span class="playlist-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M3 10h11v2H3v-2zm0-4h11v2H3V6zm0 8h7v2H3v-2zm13-1v8l6-4-6-4z" />
-                </svg>
+                <ListVideo :size="24" />
               </span>
               <span class="playlist-text">
                 <span class="playlist-title">{{ p.title }}</span>
                 <span class="playlist-meta">
-                  {{ p.item_count }} {{ p.item_count === 1 ? 'video' : 'videos' }}
-                  • {{ timeAgo(p.created_at) }}
+                  {{ p.item_count }} видео • {{ timeAgo(p.created_at) }}
                 </span>
               </span>
             </RouterLink>
           </li>
         </ul>
         <div v-else class="empty-state">
-          <h2>No playlists</h2>
-          <p>This channel hasn't created any playlists.</p>
+          <ListVideo :size="48" />
+          <h2>Нет плейлистов</h2>
+          <p>На этом канале пока нет плейлистов.</p>
         </div>
       </template>
     </template>
@@ -228,10 +237,20 @@ watch(
 </template>
 
 <style scoped>
-.channel-header {
+/* ---- Banner ---- */
+.banner {
+  width: 100%;
+  aspect-ratio: 16 / 5;
+  background: var(--surface);
+  border-radius: 12px;
+}
+
+/* ---- Head row ---- */
+.channel-head {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
+  padding-top: 12px;
   flex-wrap: wrap;
 }
 
@@ -240,17 +259,19 @@ watch(
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--bg-elevated);
+  background: var(--surface);
   color: var(--text);
-  font-weight: 600;
+  font-weight: 500;
   flex-shrink: 0;
   user-select: none;
 }
 
-.avatar-large {
-  width: 96px;
-  height: 96px;
-  font-size: 40px;
+.avatar-128 {
+  width: 128px;
+  height: 128px;
+  font-size: 48px;
+  border: 4px solid var(--bg);
+  margin-top: -64px;
 }
 
 .channel-info {
@@ -259,45 +280,77 @@ watch(
 }
 
 .channel-name {
-  font-size: 24px;
-  margin-bottom: 4px;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
 }
 
 .channel-meta {
-  color: var(--text-secondary);
+  color: var(--text-2);
   font-size: 14px;
+  margin: 4px 0 0;
 }
 
-.channel-subscribed {
-  color: var(--text-secondary);
-  font-size: 12px;
-  margin-top: 4px;
+/* ---- Pill (subscribe) ---- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.subscribe-btn {
-  align-self: center;
+.pill:hover {
+  background: var(--surface-hover);
 }
 
-.subscribe-btn.subscribed {
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
+.subscribe-pill {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.subscribe-pill:hover {
+  background: var(--text);
+  opacity: 0.9;
+}
+
+.subscribe-pill.subscribed {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.subscribe-pill.subscribed:hover {
+  background: var(--surface-hover);
 }
 
 /* ---- Tabs ---- */
 .tabs {
   display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--border);
-  margin: 24px 0;
+  gap: 24px;
+  border-bottom: 1px solid var(--divider);
+  margin: 20px 0 24px;
 }
 
 .tab {
-  padding: 10px 18px;
+  padding: 12px 0;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
+  margin-bottom: -1px;
+  color: var(--text-2);
   font: inherit;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
 }
@@ -308,24 +361,31 @@ watch(
 
 .tab.active {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--text);
 }
 
-/* ---- Grid ---- */
+/* ---- Grid (same as HomePage) ---- */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px 16px;
 }
 
-.card-skeleton .thumb-skeleton {
-  aspect-ratio: 16 / 9;
-  border-radius: 12px;
+@media (max-width: 792px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.card-skeleton .line-skeleton {
-  height: 14px;
-  margin-top: 10px;
+/* ---- Empty state ---- */
+.empty-state {
+  color: var(--text-2);
+}
+
+.empty-state :deep(svg),
+.empty-state svg {
+  color: var(--text-2);
+  margin-bottom: 12px;
 }
 
 /* ---- Playlists ---- */
@@ -344,16 +404,17 @@ watch(
   gap: 14px;
   padding: 12px 16px;
   border-radius: 12px;
-  background: var(--bg-elevated);
+  background: var(--surface);
   color: var(--text);
+  text-decoration: none;
 }
 
 .playlist-link:hover {
-  background: var(--bg-hover);
+  background: var(--surface-hover);
 }
 
 .playlist-icon {
-  color: var(--text-secondary);
+  color: var(--text-2);
   display: flex;
 }
 
@@ -372,31 +433,59 @@ watch(
 }
 
 .playlist-meta {
-  color: var(--text-secondary);
+  color: var(--text-2);
   font-size: 12px;
 }
 
 /* ---- Skeletons ---- */
-.header-skeleton {
+.channel-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.banner-skeleton {
+  width: 100%;
+  aspect-ratio: 16 / 5;
+  border-radius: 12px;
+}
+
+.head-skeleton {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
+  padding-top: 12px;
 }
 
-.header-skeleton .avatar-skeleton {
-  width: 96px;
-  height: 96px;
+.head-skeleton .avatar-skeleton {
+  width: 128px;
+  height: 128px;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.header-skeleton-lines {
+.head-skeleton-lines {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.header-skeleton-lines .line-skeleton.short {
+.head-skeleton-lines .line-skeleton {
+  height: 24px;
+}
+
+.head-skeleton-lines .line-skeleton.short {
   width: 40%;
+}
+
+.card-skeleton .thumb-skeleton {
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+}
+
+.card-skeleton .line-skeleton {
+  height: 14px;
+  margin-top: 10px;
 }
 </style>

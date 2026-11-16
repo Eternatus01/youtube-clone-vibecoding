@@ -14,6 +14,18 @@ const loading = ref(true)
 const error = ref('')
 const search = ref('')
 
+const categories = [
+  'Все',
+  'Музыка',
+  'Игры',
+  'Фильмы',
+  'Спорт',
+  'Обучение',
+  'Новости',
+  'Технологии',
+]
+const activeCategory = ref('Все')
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -30,7 +42,7 @@ async function load() {
   })
 
   if (apiError || !data) {
-    error.value = 'Failed to load videos. Please try again.'
+    error.value = 'Не удалось загрузить видео. Попробуйте еще раз.'
     videos.value = []
   } else {
     // Backend PaginatedResponse.items is untyped; the list endpoint returns videos.
@@ -54,19 +66,39 @@ watch(
 
 <template>
   <div class="page">
-    <h1 v-if="search" class="page-title">Results for “{{ search }}”</h1>
-    <h1 v-else class="page-title">Recommended</h1>
+    <div class="chips" role="tablist" aria-label="Категории">
+      <button
+        v-for="c in categories"
+        :key="c"
+        type="button"
+        class="chip"
+        :class="{ active: c === activeCategory }"
+        :aria-pressed="c === activeCategory"
+        @click="activeCategory = c"
+      >
+        {{ c }}
+      </button>
+    </div>
+
+    <h1 v-if="search" class="page-title">Результаты: «{{ search }}»</h1>
+    <h1 v-else class="page-title">Рекомендации</h1>
 
     <div v-if="error" class="error-banner">
       {{ error }}
-      <button class="btn retry-btn" @click="retry">Retry</button>
+      <button class="btn retry-btn" @click="retry">Повторить</button>
     </div>
 
-    <div v-if="loading" class="grid">
-      <div v-for="n in 8" :key="n" class="card-skeleton">
+    <div v-if="loading" class="grid" aria-hidden="true">
+      <div v-for="n in 12" :key="n" class="card-skeleton">
         <div class="skeleton thumb-skeleton"></div>
-        <div class="skeleton line-skeleton"></div>
-        <div class="skeleton line-skeleton short"></div>
+        <div class="skel-row">
+          <div class="skeleton avatar-skeleton"></div>
+          <div class="skel-lines">
+            <div class="skeleton skel-line skel-title"></div>
+            <div class="skeleton skel-line skel-channel"></div>
+            <div class="skeleton skel-line skel-meta"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -75,12 +107,12 @@ watch(
     </div>
 
     <div v-else-if="!error" class="empty-state">
-      <h2>{{ search ? 'No results found' : 'No videos yet' }}</h2>
+      <h2>{{ search ? 'По вашему запросу ничего не найдено' : 'Нет видео' }}</h2>
       <p>
         {{
           search
-            ? 'Try a different search term.'
-            : 'Be the first to upload a video!'
+            ? 'Попробуйте изменить поисковый запрос.'
+            : 'Будьте первым, кто загрузит видео!'
         }}
       </p>
     </div>
@@ -88,23 +120,106 @@ watch(
 </template>
 
 <style scoped>
+/* ---- Chips row ---- */
+.chips {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+  margin: 0 -24px;
+  padding-left: 24px;
+  padding-right: 24px;
+  background: var(--bg);
+  margin-bottom: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  background: var(--surface-hover);
+}
+
+.chip.active {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.chip.active:hover {
+  background: var(--text);
+}
+
+/* ---- Grid ---- */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px 16px;
 }
 
+@media (max-width: 792px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Skeletons: mirror real VideoCard geometry ---- */
 .card-skeleton .thumb-skeleton {
   aspect-ratio: 16 / 9;
-  border-radius: 12px;
+  border-radius: var(--radius);
 }
 
-.card-skeleton .line-skeleton {
+.card-skeleton .skel-row {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0 0;
+}
+
+.card-skeleton .avatar-skeleton {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.card-skeleton .skel-lines {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-skeleton .skel-line {
+  margin-bottom: 6px;
+}
+
+.card-skeleton .skel-title {
   height: 14px;
-  margin-top: 10px;
+  width: 100%;
 }
 
-.card-skeleton .line-skeleton.short {
+.card-skeleton .skel-channel {
+  height: 12px;
   width: 60%;
+}
+
+.card-skeleton .skel-meta {
+  height: 12px;
+  width: 40%;
+  margin-bottom: 0;
 }
 </style>

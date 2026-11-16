@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
+import { Loader2, Upload, X } from 'lucide-vue-next'
 import { api, extractError } from '../api/client'
 import { putFile } from '../api/upload'
 import { formatBytes } from '../utils/format'
+import { useToast } from '../composables/useToast'
 
-const router = useRouter()
+const toast = useToast()
 
-type Phase = 'form' | 'uploading' | 'processing' | 'failed'
+type Phase = 'form' | 'uploading' | 'processing' | 'done' | 'failed'
 type Visibility = 'public' | 'private' | 'unlisted'
 
 const POLL_INTERVAL_MS = 1500
+const TITLE_MAX = 100
 
 const file = ref<File | null>(null)
 const title = ref('')
@@ -20,7 +23,8 @@ const visibility = ref<Visibility>('public')
 const phase = ref<Phase>('form')
 const progress = ref(0)
 const errorMessage = ref('')
-const statusText = ref('')
+const readyVideoId = ref('')
+const dragOver = ref(false)
 
 let pollTimer: number | null = null
 
@@ -43,19 +47,28 @@ function onFileChange(e: Event) {
 
 function setFile(selected: File | null) {
   if (selected && !selected.type.startsWith('video/')) {
-    errorMessage.value = 'Please select a video file.'
+    errorMessage.value = 'Выберите видеофайл.'
     return
   }
   errorMessage.value = ''
   file.value = selected
   if (selected && !title.value.trim()) {
-    title.value = selected.name.replace(/\.[^.]+$/, '')
+    title.value = selected.name.replace(/\.[^.]+$/, '').slice(0, TITLE_MAX)
   }
 }
 
 function onDrop(e: DragEvent) {
+  dragOver.value = false
   e.preventDefault()
   setFile(e.dataTransfer?.files?.[0] ?? null)
+}
+
+function onDragOver() {
+  dragOver.value = true
+}
+
+function onDragLeave() {
+  dragOver.value = false
 }
 
 function reset() {
@@ -64,7 +77,7 @@ function reset() {
   phase.value = 'form'
   progress.value = 0
   errorMessage.value = ''
-  statusText.value = ''
+  readyVideoId.value = ''
 }
 
 async function startUpload() {
@@ -72,7 +85,6 @@ async function startUpload() {
   errorMessage.value = ''
   phase.value = 'uploading'
   progress.value = 0
-  statusText.value = 'Uploading…'
 
   try {
     // 1. Init: get presigned PUT URL.
@@ -87,35 +99,30 @@ async function startUpload() {
       },
     })
     if (init.error || !init.data) {
-      throw new Error(extractError(init.error, 'Failed to start upload'))
+      throw new Error(extractError(init.error, 'Не удалось начать загрузку'))
     }
     const { upload_url, upload_session_id, video_id } = init.data
 
     // 2. PUT the file with progress.
-    statusText.value = `Uploading… ${progress.value}%`
     await putFile(upload_url, file.value, (pct) => {
       progress.value = pct
-      statusText.value = `Uploading… ${pct}%`
     })
 
     // 3. Complete: backend enqueues transcoding.
-    statusText.value = 'Finishing upload…'
     const done = await api.POST('/api/uploads/complete', {
       body: { upload_session_id },
     })
     if (done.error) {
-      throw new Error(extractError(done.error, 'Failed to complete upload'))
+      throw new Error(extractError(done.error, 'Не удалось завершить загрузку'))
     }
 
     // 4. Poll until the video leaves uploading/processing.
     phase.value = 'processing'
-    statusText.value = 'Processing video…'
-    progress.value = 0
     poll(video_id)
   } catch (e) {
     phase.value = 'failed'
-    errorMessage.value = e instanceof Error ? e.message : 'Upload failed'
-    statusText.value = ''
+    errorMessage.value = e instanceof Error ? e.message : 'Ошибка загрузки'
+    toast.push(errorMessage.value)
   }
 }
 
@@ -127,23 +134,25 @@ function poll(videoId: string) {
         params: { path: { video_id: videoId } },
       })
       if (apiError || !data) {
-        throw new Error(extractError(apiError, 'Failed to check video status'))
+        throw new Error(extractError(apiError, 'Не удалось проверить статус видео'))
       }
       if (data.status === 'ready') {
         stopPolling()
-        router.push({ name: 'watch', params: { id: videoId } })
+        phase.value = 'done'
+        readyVideoId.value = videoId
+        toast.push('Видео обработано и опубликовано')
       } else if (data.status === 'failed') {
         stopPolling()
         phase.value = 'failed'
-        errorMessage.value = 'Video processing failed.'
-        statusText.value = ''
+        errorMessage.value = 'Не удалось обработать видео.'
+        toast.push(errorMessage.value)
       }
       // still uploading/processing: keep polling
     } catch (e) {
       stopPolling()
       phase.value = 'failed'
-      errorMessage.value = e instanceof Error ? e.message : 'Failed to check video status'
-      statusText.value = ''
+      errorMessage.value = e instanceof Error ? e.message : 'Не удалось проверить статус видео'
+      toast.push(errorMessage.value)
     }
   }, POLL_INTERVAL_MS)
 }
@@ -159,148 +168,310 @@ onBeforeUnmount(stopPolling)
 </script>
 
 <template>
-  <div class="page upload">
-    <h1 class="page-title">Upload video</h1>
+  <div class="upload">
+    <div class="panel">
+      <!-- Step 1: pick file + metadata -->
+      <template v-if="phase === 'form'">
+        <h1 class="panel-title">Загрузить видео</h1>
 
-    <div v-if="errorMessage" class="error-banner" role="alert">
-      {{ errorMessage }}
-      <button v-if="phase === 'failed'" class="btn" style="margin-left: 12px" @click="reset">
-        Start over
-      </button>
-    </div>
-
-    <!-- Step 1: pick file + metadata -->
-    <form v-if="phase === 'form'" class="panel" @submit.prevent="startUpload">
-      <div
-        class="dropzone"
-        :class="{ filled: file }"
-        role="button"
-        tabindex="0"
-        aria-label="Select video file"
-        @click="pickFile"
-        @keydown.enter.prevent="pickFile"
-        @keydown.space.prevent="pickFile"
-        @dragover.prevent
-        @drop="onDrop"
-      >
-        <template v-if="file">
-          <div class="file-name">{{ file.name }}</div>
-          <div class="file-size">{{ formatBytes(file.size) }}</div>
-          <button type="button" class="btn" @click.stop="pickFile">Change file</button>
-        </template>
-        <template v-else>
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" class="drop-icon">
-            <path d="M12 4l6 6h-4v7h-4v-7H6l6-6zM5 19h14v2H5v-2z" />
-          </svg>
-          <p>Select a video file to upload</p>
-          <p class="hint">Or drag and drop it here</p>
-        </template>
-      </div>
-      <input
-        ref="fileInput"
-        type="file"
-        accept="video/*,.mp4,.webm,.mov"
-        hidden
-        @change="onFileChange"
-      />
-
-      <div class="field">
-        <label for="title">Title *</label>
-        <input id="title" v-model="title" class="input" type="text" maxlength="200" required />
-      </div>
-
-      <div class="field">
-        <label for="description">Description</label>
-        <textarea id="description" v-model="description" class="input" rows="4"></textarea>
-      </div>
-
-      <div class="field">
-        <label for="visibility">Visibility</label>
-        <select id="visibility" v-model="visibility" class="input">
-          <option value="public">Public</option>
-          <option value="private">Private</option>
-          <option value="unlisted">Unlisted</option>
-        </select>
-      </div>
-
-      <button class="btn btn-primary" type="submit" :disabled="!canSubmit">Upload</button>
-    </form>
-
-    <!-- Step 2/3: progress -->
-    <div v-else class="panel">
-      <h2 class="status-title">{{ statusText || (phase === 'processing' ? 'Processing video…' : 'Working…') }}</h2>
-      <div class="progress-track" role="progressbar">
         <div
-          class="progress-fill"
-          :class="{ indeterminate: phase === 'processing' || (!progress && phase === 'uploading') }"
-          :style="phase === 'uploading' && progress ? { width: `${progress}%` } : undefined"
-        ></div>
+          v-if="!file"
+          class="dropzone"
+          :class="{ over: dragOver }"
+          role="button"
+          tabindex="0"
+          aria-label="Выбрать файл"
+          @click="pickFile"
+          @keydown.enter.prevent="pickFile"
+          @keydown.space.prevent="pickFile"
+          @drop="onDrop"
+          @dragover="onDragOver"
+          @dragleave="onDragLeave"
+        >
+          <Upload :size="48" stroke-width="1.75" class="drop-icon" />
+          <p class="drop-text">Перетащите файл сюда или выберите</p>
+          <button class="btn btn-primary pill" type="button" @click.stop="pickFile">
+            Выбрать файл
+          </button>
+        </div>
+
+        <div v-else class="file-row">
+          <div class="file-info">
+            <span class="file-name">{{ file.name }}</span>
+            <span class="file-size">{{ formatBytes(file.size) }}</span>
+          </div>
+          <button class="icon-btn" title="Убрать файл" aria-label="Убрать файл" @click="reset">
+            <X :size="20" stroke-width="1.75" />
+          </button>
+        </div>
+
+        <input
+          ref="fileInput"
+          type="file"
+          accept="video/*"
+          class="sr-only"
+          @change="onFileChange"
+        />
+
+        <form v-if="file" class="meta-form" @submit.prevent="startUpload">
+          <div class="field">
+            <label for="title">Название</label>
+            <div class="counter-wrap">
+              <input
+                id="title"
+                v-model="title"
+                class="input input-lg"
+                type="text"
+                maxlength="100"
+                required
+              />
+              <span class="counter">{{ title.length }}/{{ TITLE_MAX }}</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="description">Описание</label>
+            <textarea id="description" v-model="description" class="input" rows="5"></textarea>
+          </div>
+
+          <div class="field">
+            <label for="visibility">Доступ</label>
+            <select id="visibility" v-model="visibility" class="input input-lg">
+              <option value="public">Публичное</option>
+              <option value="private">Приватное</option>
+              <option value="unlisted">По ссылке</option>
+            </select>
+          </div>
+
+          <p v-if="errorMessage" class="inline-error">{{ errorMessage }}</p>
+
+          <button class="btn btn-primary" type="submit" :disabled="!canSubmit">Загрузить</button>
+        </form>
+      </template>
+
+      <!-- Step 2/3: progress / processing -->
+      <div v-else class="status-panel">
+        <div class="progress-track">
+          <div
+            class="progress-fill"
+            :class="{ indeterminate: phase !== 'uploading' }"
+            :style="phase === 'uploading' ? { width: `${progress}%` } : undefined"
+          ></div>
+        </div>
+        <p class="progress-num">{{ phase === 'uploading' ? `${progress}%` : '' }}</p>
+
+        <p v-if="phase === 'uploading'" class="status-line">
+          <span class="status-spin"><Loader2 :size="20" stroke-width="1.75" class="animate-spin" /></span>
+          Загрузка…
+        </p>
+        <p v-else-if="phase === 'processing'" class="status-line">
+          <span class="status-spin"><Loader2 :size="20" stroke-width="1.75" class="animate-spin" /></span>
+          Обработка…
+        </p>
+
+        <template v-else-if="phase === 'done'">
+          <p class="status-done">Готово</p>
+          <RouterLink
+            :to="{ name: 'watch', params: { id: readyVideoId } }"
+            class="btn btn-primary pill watch-link"
+          >
+            Смотреть видео
+          </RouterLink>
+        </template>
+
+        <template v-else-if="phase === 'failed'">
+          <p class="inline-error">{{ errorMessage }}</p>
+          <button class="btn" type="button" @click="reset">Повторить</button>
+        </template>
       </div>
-      <p v-if="phase === 'processing'" class="hint">
-        Transcoding usually takes a moment. You will be redirected when the video is ready.
-      </p>
     </div>
   </div>
 </template>
 
 <style scoped>
 .upload {
-  max-width: 720px;
+  max-width: 960px;
+  margin: 24px auto;
 }
 
 .panel {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  background: var(--surface);
   border-radius: 12px;
-  padding: 24px;
+  padding: 32px;
 }
 
+.panel-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 24px;
+}
+
+/* ---- Drop zone ---- */
 .dropzone {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   padding: 40px 24px;
-  border: 2px dashed var(--border);
+  border: 2px dashed var(--divider);
   border-radius: 12px;
   text-align: center;
   cursor: pointer;
-  margin-bottom: 24px;
-  color: var(--text-secondary);
+  color: var(--text-2);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
+.dropzone.over,
 .dropzone:hover,
 .dropzone:focus-visible {
   border-color: var(--accent);
   outline: none;
 }
 
-.dropzone.filled {
-  color: var(--text);
-  border-style: solid;
+.dropzone.over {
+  background: var(--overlay-hover);
 }
 
 .drop-icon {
-  color: var(--text-secondary);
+  color: var(--text-2);
+}
+
+.drop-text {
+  font-size: 14px;
+}
+
+.pill {
+  border-radius: 18px;
+  height: 40px;
+}
+
+/* ---- Selected file row ---- */
+.file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 24px;
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .file-name {
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   word-break: break-all;
 }
 
 .file-size {
   font-size: 12px;
-  margin-bottom: 8px;
+  color: var(--text-2);
 }
 
-.hint {
-  color: var(--text-secondary);
+/* ---- Metadata form ---- */
+.meta-form {
+  margin-top: 8px;
+}
+
+.counter-wrap {
+  position: relative;
+}
+
+.counter {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 12px;
+  color: var(--text-2);
+  pointer-events: none;
 }
 
-.status-title {
+.input-lg {
+  height: 48px;
+  padding: 10px 12px;
+}
+
+.counter-wrap .input-lg {
+  padding-right: 56px;
+}
+
+.inline-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+/* ---- Progress / status ---- */
+.status-panel {
+  max-width: 480px;
+  margin: 40px auto;
+  text-align: center;
+}
+
+.progress-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-hover);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.15s ease;
+}
+
+.progress-fill.indeterminate {
+  width: 40%;
+}
+
+.progress-num {
+  font-size: 12px;
+  color: var(--text-2);
+  margin: 8px 0 16px;
+  min-height: 18px;
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.status-done {
   font-size: 16px;
+  font-weight: 700;
   margin-bottom: 16px;
+}
+
+.watch-link {
+  display: inline-flex;
+}
+
+.status-spin {
+  display: inline-flex;
+  color: var(--text-2);
+}
+
+/* animate-spin is Tailwind-ish; define locally */
+.animate-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
