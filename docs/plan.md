@@ -115,6 +115,12 @@ Phases (max 2 parallel per phase):
   - ChannelEditPage: username edit, avatar + cover upload with preview.
   - Migration 0003: users.cover_url, users.description, videos.tags, videos.custom_poster_url.
   - 46 tests pass. Backend + frontend built. vue-tsc clean.
+- Avatar/poster rendering ✅ (2026-11-17):
+  - Channel avatars render as images on VideoCard, WatchPage owner row + comments, ChannelPage, ChannelEditPage (fallback to initial).
+  - Custom video poster: upload on UploadPage (optional), replace in MyVideosPage inline edit.
+  - get_poster sends Cache-Control: no-store; cards/watch/related cache-bust via ?v=custom_poster_url.
+  - Fixed earlier 422 on avatar/cover (FormData field name now `avatar`/`cover`); avatar drawn above banner (z-index).
+  - 15 video+interaction tests pass. vue-tsc clean, vite build ok.
 
 - ⚠ SeaweedFS S3 root returns 403 (no auth) → healthcheck uses `nc -z 8333`.
 - ⚠ Clean Ubuntu VM test not done (no VM available on Windows dev machine).
