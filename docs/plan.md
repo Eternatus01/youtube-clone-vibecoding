@@ -52,6 +52,45 @@ DoD: one command on clean Ubuntu → scenario works with seed data.
 ## M5 Polish + TZ check (day 9, day 10 = buffer)
 FE: YouTube look (spacing, typography, skeletons, responsive, empty/error states). Lead: checklist TZ screens/requirements vs implemented, fix gaps, final README. No new features beyond TZ.
 
+## M6 Navigation, History, Subscriptions
+Goal: finish missing user-facing functionality before UI polish.
+
+Backend:
+- Inspect existing channel, views and subscription implementations first; reuse them instead of creating duplicate endpoints or tables.
+- Own channel endpoint: resolve the authenticated user's channel/profile.
+- Watch history for authenticated users:
+  - record a video when playback/view is registered;
+  - repeated views update `last_watched_at`, not create duplicate rows;
+  - store progress_seconds if frontend sends playback progress;
+  - paginated newest-first history endpoint;
+  - remove one item and clear own history;
+  - exclude videos the current user can no longer access.
+- Subscriptions:
+  - idempotent subscribe/unsubscribe;
+  - list channels subscribed to by current user;
+  - paginated feed containing ready public videos from subscribed channels, newest first;
+  - correct subscriber count;
+  - private, hidden and processing videos never appear.
+- Add an Alembic migration only if the current schema lacks the required history data.
+- Add targeted tests for authorization, idempotency, filtering and pagination.
+
+Frontend:
+- User/avatar menu: working “Мой канал” link for the authenticated user.
+- Sidebar: working “История” and “Подписки” routes; active states.
+- History page: newest first, progress indicator when available, remove item, clear history, loading/empty/error states.
+- Subscriptions page: subscribed-channel list and video feed; subscribe buttons update without reload and correctly reflect server state.
+- Guests clicking protected links are redirected to login and then returned to the requested page.
+- Use generated OpenAPI types; do not duplicate API interfaces.
+
+DoD:
+1. User menu → “Мой канал” opens the current user's channel.
+2. Watching a video makes it appear once in History; watching again moves it to the top.
+3. Removing and clearing history work only for its owner.
+4. Subscribe → channel appears in Subscriptions and its public ready videos appear in the feed.
+5. Unsubscribe removes the channel/feed items without a page reload.
+6. Private, hidden and processing videos never leak.
+7. Backend affected tests, vue-tsc and frontend build pass.
+
 ## Status
 - M0 ✅: skeleton. Stack up: PostgreSQL, SeaweedFS 4.53 (S3), api, worker, nginx. Migration 0001 (14 tables). /docs + /openapi.json 200. Frontend builds (Vite+TS).
 - M1 ✅: auth, upload (presigned init→complete→transcode), worker (ffprobe, ≤720p H.264 faststart + poster, retries), feed/get/stream/poster with visibility authz, role checks server-side. Layered routers→services→repositories.
@@ -59,6 +98,8 @@ FE: YouTube look (spacing, typography, skeletons, responsive, empty/error states
 - M3 ✅: access matrix, shares, mine, reports, moderation, admin. FE: MyVideos, Moderation, Admin. 36 tests + smoke.py passed. Frontend builds clean.
 - M4 ✅: seed (5 users: admin/moderator/alice/bob/carol, 8 videos with mixed visibility, comments, likes, subs, playlist, report — idempotent). install.sh hardened (disk check, compose version check, chmod 600 .env, DATABASE_URL sync, health timeout with error exit). README.md (stack, quick start, demo logins, features, structure, agents/models used). docs/db-schema.md (mermaid ER, 13 tables, indexes, enums). docs/security.md (auth, authz, storage, input validation, headers). 36 tests green, smoke.py passed.
 - M5 ✅: frontend polish (VideoCard hover scale+shadow, dead sidebar links → disabled 'Coming soon' buttons, retry buttons on error states, unified .page-title sizing, global button:disabled style). TZ compliance verified (all 7 screens: home feed, watch, channel, search, upload, auth, moderation; all 7 requirements: upload/storage/streaming, 3 roles, private videos, FastAPI+PG, /docs, simple frontend, one-command deploy). install.sh executable (chmod +x). 36 tests pass, smoke.py pass, frontend builds clean.
+- M6 ✅: WatchHistory model + migration 0002 (uq_watch_history, index). POST /api/history/{id} records/updates (owner skip, visibility enforced). GET /api/history paginated newest-first, filters inaccessible videos. DELETE item / clear. GET /api/channels/me returns own channel. GET /api/subscriptions lists subscribed channels. GET /api/subscriptions/feed paginated public+ready from subs, newest first. FE: HistoryPage (remove/clear, progress, timeAgo), SubscriptionsPage (tabs channels/feed, subscribe/unsubscribe inline). Sidebar links live. User menu "Мой канал". Guest redirect works. 46 tests pass, smoke.py pass, vue-tsc clean, vite build clean.
+
 - ⚠ SeaweedFS S3 root returns 403 (no auth) → healthcheck uses `nc -z 8333`. Old CloudServer `s3_data` volume orphaned (harmless).
 - ⚠ Worker image has no bind mount (prod build) — rebuild after backend changes: `docker compose build worker && docker compose up -d worker`.
 - ⚠ Clean Ubuntu VM test not done (no VM available on Windows dev machine).
