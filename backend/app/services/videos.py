@@ -109,6 +109,43 @@ async def get_video(db: AsyncSession, video_id: str, user) -> Video:
     return video
 
 
+async def register_view(db: AsyncSession, video: Video, user) -> None:
+    """Count a view unless the owner is watching their own video."""
+    if user is not None and video.owner_id == user.id:
+        return
+    await videos_repo.increment_views(db, video.id)
+    # increment_views commits, expiring `video`; re-read the committed row so
+    # the serialized views value is exact (no double-count).
+    await db.refresh(video)
+
+
+async def list_related(
+    db: AsyncSession,
+    video: Video,
+    *,
+    page: int,
+    page_size: int,
+    user,
+) -> PaginatedResponse:
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 100)
+    videos, total = await videos_repo.list_related(
+        db,
+        video_id=video.id,
+        owner_id=video.owner_id,
+        offset=(page - 1) * page_size,
+        limit=page_size,
+    )
+    items = await serialize_videos(db, videos, user)
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=math.ceil(total / page_size) if total else 0,
+    )
+
+
 async def get_assets(db: AsyncSession, video_id: str) -> list[VideoAsset]:
     result = await db.execute(
         select(VideoAsset).where(VideoAsset.video_id == video_id)

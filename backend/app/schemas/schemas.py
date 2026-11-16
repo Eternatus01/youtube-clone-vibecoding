@@ -148,6 +148,18 @@ class SubscriptionOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ChannelOut(BaseModel):
+    id: str
+    username: str
+    avatar_url: str | None = None
+    created_at: datetime
+    subscriber_count: int = 0
+    video_count: int = 0
+    is_subscribed: bool | None = None
+
+    model_config = {"from_attributes": True}
+
+
 # ---- Playlists ----
 
 class PlaylistCreate(BaseModel):

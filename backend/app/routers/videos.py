@@ -10,6 +10,7 @@ from app.schemas.schemas import (
     VideoOut,
     VideoUpdate,
 )
+from app.services import likes as likes_service
 from app.services import videos as videos_service
 
 router = APIRouter(prefix="/api/videos", tags=["videos"])
@@ -35,6 +36,7 @@ async def get_video(
     db: AsyncSession = Depends(get_db),
 ):
     video = await videos_service.get_video(db, video_id, current_user)
+    await videos_service.register_view(db, video, current_user)
     return await videos_service.serialize_video(db, video, current_user)
 
 
@@ -116,10 +118,32 @@ async def get_poster(
 
 
 @router.post("/{video_id}/like", response_model=LikeInfo)
-async def like_video(video_id: str, current_user=Depends(get_current_user)):
-    raise NotImplementedError
+async def like_video(
+    video_id: str,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await likes_service.like_video(db, video_id, current_user)
 
 
 @router.delete("/{video_id}/like", response_model=LikeInfo)
-async def unlike_video(video_id: str, current_user=Depends(get_current_user)):
-    raise NotImplementedError
+async def unlike_video(
+    video_id: str,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await likes_service.unlike_video(db, video_id, current_user)
+
+
+@router.get("/{video_id}/related", response_model=PaginatedResponse)
+async def related_videos(
+    video_id: str,
+    page: int = 1,
+    page_size: int = 10,
+    current_user=Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    video = await videos_service.get_video(db, video_id, current_user)
+    return await videos_service.list_related(
+        db, video, page=page, page_size=page_size, user=current_user
+    )
