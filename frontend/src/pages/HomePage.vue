@@ -59,7 +59,7 @@ watch(
 
     <div v-if="error" class="error-banner">
       {{ error }}
-      <button class="btn" style="margin-left: 12px" @click="retry">Retry</button>
+      <button class="btn retry-btn" @click="retry">Retry</button>
     </div>
 
     <div v-if="loading" class="grid">

@@ -55,6 +55,13 @@ const channel = () => props.video.owner?.username ?? 'Unknown channel'
 .card {
   display: block;
   cursor: pointer;
+  border-radius: 12px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
 .thumb {

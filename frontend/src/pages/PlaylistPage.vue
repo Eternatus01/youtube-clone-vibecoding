@@ -100,7 +100,10 @@ watch(
 
 <template>
   <div class="page playlist-page">
-    <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="error" class="error-banner">
+      {{ error }}
+      <button class="btn retry-btn" @click="load">Retry</button>
+    </div>
     <div v-if="actionError" class="error-banner">{{ actionError }}</div>
 
     <div v-if="loading" class="loading">

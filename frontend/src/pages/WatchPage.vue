@@ -307,7 +307,10 @@ watch(
 
 <template>
   <div class="page watch">
-    <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="error" class="error-banner">
+      {{ error }}
+      <button class="btn retry-btn" @click="load">Retry</button>
+    </div>
 
     <div v-if="loading" class="loading watch-layout">
       <div class="watch-main">

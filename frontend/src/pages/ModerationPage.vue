@@ -63,6 +63,11 @@ function switchTab(t: Tab) {
   else loadActions()
 }
 
+function retry() {
+  if (tab.value === 'reports') loadReports()
+  else loadActions()
+}
+
 async function resolve(report: ReportOut, action: 'hide' | 'restore') {
   const reason = (resolveReason.value[report.id] ?? '').trim()
   if (!reason) {
@@ -127,7 +132,10 @@ onMounted(loadReports)
       </button>
     </div>
 
-    <div v-if="error" class="banner error-banner">{{ error }}</div>
+    <div v-if="error" class="banner error-banner">
+      {{ error }}
+      <button class="btn retry-btn" @click="retry">Retry</button>
+    </div>
 
     <div v-if="loading" class="skeletons">
       <div v-for="n in 3" :key="n" class="card item-skeleton">
@@ -214,11 +222,6 @@ onMounted(loadReports)
   max-width: 900px;
   margin: 0 auto;
   padding: 24px 16px 48px;
-}
-
-.page-title {
-  font-size: 22px;
-  margin: 0 0 16px;
 }
 
 .tabs {

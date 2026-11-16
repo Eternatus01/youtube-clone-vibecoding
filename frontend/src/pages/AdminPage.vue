@@ -88,7 +88,10 @@ onMounted(load)
     <h1 class="page-title">Admin</h1>
     <p class="subtitle">{{ total }} users</p>
 
-    <div v-if="error" class="banner error-banner">{{ error }}</div>
+    <div v-if="error" class="banner error-banner">
+      {{ error }}
+      <button class="btn retry-btn" @click="load">Retry</button>
+    </div>
     <div v-if="message" class="banner ok-banner">{{ message }}</div>
 
     <div v-if="loading" class="skeletons">
@@ -133,15 +136,10 @@ onMounted(load)
   padding: 24px 16px 48px;
 }
 
-.page-title {
-  font-size: 22px;
-  margin: 0 0 4px;
-}
-
 .subtitle {
   color: var(--text-secondary);
   font-size: 13px;
-  margin: 0 0 16px;
+  margin: -12px 0 16px;
 }
 
 .banner {

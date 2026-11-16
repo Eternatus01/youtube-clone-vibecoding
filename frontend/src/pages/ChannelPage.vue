@@ -118,7 +118,10 @@ watch(
 
 <template>
   <div class="page channel-page">
-    <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="error" class="error-banner">
+      {{ error }}
+      <button class="btn retry-btn" @click="load">Retry</button>
+    </div>
 
     <div v-if="loading" class="header-skeleton">
       <div class="skeleton avatar-skeleton"></div>

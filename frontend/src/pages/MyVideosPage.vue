@@ -199,7 +199,10 @@ onMounted(load)
   <div class="page">
     <h1 class="page-title">Your videos</h1>
 
-    <div v-if="error" class="banner error-banner">{{ error }}</div>
+    <div v-if="error" class="banner error-banner">
+      {{ error }}
+      <button class="btn retry-btn" @click="load">Retry</button>
+    </div>
     <div v-if="message" class="banner ok-banner">{{ message }}</div>
 
     <div v-if="loading" class="skeletons">
@@ -330,11 +333,6 @@ onMounted(load)
   max-width: 1000px;
   margin: 0 auto;
   padding: 24px 16px 48px;
-}
-
-.page-title {
-  font-size: 22px;
-  margin: 0 0 16px;
 }
 
 .banner {

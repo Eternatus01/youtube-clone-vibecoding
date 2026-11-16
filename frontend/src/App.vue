@@ -217,18 +217,28 @@ const initials = () =>
           </svg>
           <span class="side-label">Home</span>
         </RouterLink>
-        <RouterLink to="/subscriptions" class="side-link" :class="{ active: route.name === 'subscriptions' }">
+        <button
+          type="button"
+          class="side-link dead-link"
+          title="Coming soon"
+          disabled
+        >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <path d="M4 6h16v2H4V6zm2-3h12v2H6V3zm-2 7h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm6 2.5v6l5-3-5-3z" />
           </svg>
           <span class="side-label">Subscriptions</span>
-        </RouterLink>
-        <RouterLink to="/history" class="side-link" :class="{ active: route.name === 'history' }">
+        </button>
+        <button
+          type="button"
+          class="side-link dead-link"
+          title="Coming soon"
+          disabled
+        >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <path d="M13 3a9 9 0 1 0 8.94 10h-2.02A7 7 0 1 1 13 5c1.93 0 3.68.79 4.95 2.05L15 10h7V3l-2.65 2.65A8.96 8.96 0 0 0 13 3zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8H12z" />
           </svg>
           <span class="side-label">History</span>
-        </RouterLink>
+        </button>
         <RouterLink
           v-if="auth.isAuthenticated"
           to="/my-videos"
@@ -456,6 +466,16 @@ const initials = () =>
 .side-link.active {
   background: var(--bg-elevated);
   font-weight: 600;
+}
+
+/* Visually disabled placeholder links (pages not implemented yet). */
+.side-link.dead-link {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.side-link.dead-link:hover {
+  background: none;
 }
 
 .side-label {

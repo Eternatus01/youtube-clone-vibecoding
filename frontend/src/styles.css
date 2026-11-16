@@ -58,6 +58,11 @@ button {
   font: inherit;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 /* ---- Shared controls ---- */
 
 .btn {
@@ -90,6 +95,10 @@ button {
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.retry-btn {
+  margin-left: 12px;
 }
 
 .icon-btn {
