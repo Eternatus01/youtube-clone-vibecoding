@@ -46,7 +46,7 @@ function toggleSidebar() {
 const searchQuery = ref('')
 
 watch(
-  () => route.query.search,
+  () => route.query.q,
   (v) => {
     searchQuery.value = typeof v === 'string' ? v : ''
   },
@@ -55,7 +55,7 @@ watch(
 
 function submitSearch() {
   const q = searchQuery.value.trim()
-  router.push({ name: 'home', query: q ? { search: q } : {} })
+  router.push({ name: 'search', query: q ? { q } : {} })
 }
 
 // ---- User menu ----

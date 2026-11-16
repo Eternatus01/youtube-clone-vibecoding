@@ -235,6 +235,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/videos/{video_id}/related": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Related Videos */
+        get: operations["related_videos_api_videos__video_id__related_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/videos/{video_id}/comments/": {
         parameters: {
             query?: never;
@@ -297,6 +314,23 @@ export interface paths {
         };
         /** Channel Videos */
         get: operations["channel_videos_api_channels__channel_id__videos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/channels/{channel_id}/playlists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Channel Playlists */
+        get: operations["channel_playlists_api_channels__channel_id__playlists_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -903,6 +937,24 @@ export interface components {
             owner?: components["schemas"]["UserOut"] | null;
         };
         /** SubscriptionOut */
+        /** ChannelOut */
+        ChannelOut: {
+            /** Id */
+            id: string;
+            /** Username */
+            username: string;
+            avatar_url?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Subscriber Count */
+            subscriber_count: number;
+            /** Video Count */
+            video_count: number;
+            is_subscribed?: boolean | null;
+        };
         SubscriptionOut: {
             /** Id */
             id: string;
@@ -1626,6 +1678,40 @@ export interface operations {
             };
         };
     };
+    related_videos_api_videos__video_id__related_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_comment_api_videos__video_id__comments__post: {
         parameters: {
             query?: never;
@@ -1744,7 +1830,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ChannelOut"];
                 };
             };
             /** @description Validation Error */
@@ -1759,6 +1845,40 @@ export interface operations {
         };
     };
     channel_videos_api_channels__channel_id__videos_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                channel_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    channel_playlists_api_channels__channel_id__playlists_get: {
         parameters: {
             query?: {
                 page?: number;

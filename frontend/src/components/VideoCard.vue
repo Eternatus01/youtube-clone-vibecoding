@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { components } from '../api/schema'
 import { formatDuration, formatViews, timeAgo } from '../utils/format'
 
-type VideoOut = components['schemas']['VideoOut']
+/** Minimal shape every card renders; VideoOut and SearchVideoOut both satisfy it. */
+type VideoCardVideo = {
+  id: string
+  title: string
+  views: number
+  duration_seconds?: number | null
+  created_at: string
+  owner?: { username?: string } | null
+}
 
-const props = defineProps<{ video: VideoOut }>()
+const props = defineProps<{ video: VideoCardVideo }>()
 
 const posterFailed = ref(false)
 

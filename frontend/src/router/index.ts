@@ -20,6 +20,16 @@ export const router = createRouter({
       component: () => import('../pages/ChannelPage.vue'),
     },
     {
+      path: '/search',
+      name: 'search',
+      component: () => import('../pages/SearchPage.vue'),
+    },
+    {
+      path: '/playlist/:id',
+      name: 'playlist',
+      component: () => import('../pages/PlaylistPage.vue'),
+    },
+    {
       path: '/upload',
       name: 'upload',
       component: () => import('../pages/UploadPage.vue'),
