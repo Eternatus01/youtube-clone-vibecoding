@@ -99,7 +99,7 @@ async function uploadImage(kind: 'avatar' | 'cover', file: File) {
   uploading.value = kind
   try {
     const body = new FormData()
-    body.append('file', file)
+    body.append(kind, file)
     const res = await fetch(`/api/channels/me/${kind}`, {
       method: 'POST',
       credentials: 'include',

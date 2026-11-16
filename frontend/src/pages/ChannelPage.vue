@@ -288,6 +288,8 @@ watch(
   gap: 24px;
   padding-top: 12px;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
 }
 
 .avatar {
