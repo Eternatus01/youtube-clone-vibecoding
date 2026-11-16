@@ -56,8 +56,9 @@ FE: YouTube look (spacing, typography, skeletons, responsive, empty/error states
 - M0 ✅: skeleton. Stack up: PostgreSQL, SeaweedFS 4.53 (S3), api, worker, nginx. Migration 0001 (14 tables). /docs + /openapi.json 200. Frontend builds (Vite+TS).
 - M1 ✅: auth, upload (presigned init→complete→transcode), worker (ffprobe, ≤720p H.264 faststart + poster, retries), feed/get/stream/poster with visibility authz, role checks server-side. Layered routers→services→repositories.
 - M2 ✅: like/comments/subscriptions/channel/playlists/search/related/view counter. FE watch/channel/playlist/search pages. Tests green.
-- M3 ✅: access matrix in `ensure_can_view` (public/unlisted=all; private=owner+shared+mod/admin else 403; hidden=mod/admin else 404 incl owner), video_shares (owner add/remove, list), `GET /api/videos/mine`, reports (create/dup 409/self 400/mine), moderation (list/resolve hide↔restore/actions, mod+admin), admin (users list/role change/deactivate, admin only, self-guard). FE: MyVideos (edit/delete/share mgmt), report button, Moderation screen, Admin roles screen. BE 36 tests green + scripts/smoke.py (M3 privacy/role matrix) passed. Frontend builds clean (vue-tsc + vite).
+- M3 ✅: access matrix, shares, mine, reports, moderation, admin. FE: MyVideos, Moderation, Admin. 36 tests + smoke.py passed. Frontend builds clean.
+- M4 ✅: seed (5 users: admin/moderator/alice/bob/carol, 8 videos with mixed visibility, comments, likes, subs, playlist, report — idempotent). install.sh hardened (disk check, compose version check, chmod 600 .env, DATABASE_URL sync, health timeout with error exit). README.md (stack, quick start, demo logins, features, structure, agents/models used). docs/db-schema.md (mermaid ER, 13 tables, indexes, enums). docs/security.md (auth, authz, storage, input validation, headers). 36 tests green, smoke.py passed.
 - ⚠ SeaweedFS S3 root returns 403 (no auth) → healthcheck uses `nc -z 8333`. Old CloudServer `s3_data` volume orphaned (harmless).
 - ⚠ Worker image has no bind mount (prod build) — rebuild after backend changes: `docker compose build worker && docker compose up -d worker`.
-- Not done (M4+): seed (still no-op stub), install.sh hardening, README, docs (architecture/DB schema/security).
-- Next M4: seed (idempotent: admin/moderator/3 users/10 videos incl private+unlisted+hidden, comments/likes/subs/playlist/report), install.sh, README, docs, full suite once + smoke.py, clean Ubuntu VM test.
+- ⚠ Clean Ubuntu VM test not done (no VM available on Windows dev machine).
+- Next M5: polish + full TZ compliance check.
