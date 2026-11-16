@@ -104,15 +104,17 @@ Phases (max 2 parallel per phase):
 - Phase G: Empty/error states, confirm dialogs, responsive pass (1312/1015/792 breakpoints)
 
 ## Status
-- M0 ✅: skeleton. Stack up: PostgreSQL, SeaweedFS 4.53 (S3), api, worker, nginx. Migration 0001 (14 tables). /docs + /openapi.json 200. Frontend builds (Vite+TS).
-- M1 ✅: auth, upload (presigned init→complete→transcode), worker (ffprobe, ≤720p H.264 faststart + poster, retries), feed/get/stream/poster with visibility authz, role checks server-side. Layered routers→services→repositories.
-- M2 ✅: like/comments/subscriptions/channel/playlists/search/related/view counter. FE watch/channel/playlist/search pages. Tests green.
-- M3 ✅: access matrix, shares, mine, reports, moderation, admin. FE: MyVideos, Moderation, Admin. 36 tests + smoke.py passed. Frontend builds clean.
-- M4 ✅: seed (5 users: admin/moderator/alice/bob/carol, 8 videos with mixed visibility, comments, likes, subs, playlist, report — idempotent). install.sh hardened (disk check, compose version check, chmod 600 .env, DATABASE_URL sync, health timeout with error exit). README.md (stack, quick start, demo logins, features, structure, agents/models used). docs/db-schema.md (mermaid ER, 13 tables, indexes, enums). docs/security.md (auth, authz, storage, input validation, headers). 36 tests green, smoke.py passed.
-- M5 ✅: frontend polish (VideoCard hover scale+shadow, dead sidebar links → disabled 'Coming soon' buttons, retry buttons on error states, unified .page-title sizing, global button:disabled style). TZ compliance verified (all 7 screens: home feed, watch, channel, search, upload, auth, moderation; all 7 requirements: upload/storage/streaming, 3 roles, private videos, FastAPI+PG, /docs, simple frontend, one-command deploy). install.sh executable (chmod +x). 36 tests pass, smoke.py pass, frontend builds clean.
-- M6 ✅: WatchHistory model + migration 0002 (uq_watch_history, index). POST /api/history/{id} records/updates (owner skip, visibility enforced). GET /api/history paginated newest-first, filters inaccessible videos. DELETE item / clear. GET /api/channels/me returns own channel. GET /api/subscriptions lists subscribed channels. GET /api/subscriptions/feed paginated public+ready from subs, newest first. FE: HistoryPage (remove/clear, progress, timeAgo), SubscriptionsPage (tabs channels/feed, subscribe/unsubscribe inline). Sidebar links live. User menu "Мой канал". Guest redirect works. 46 tests pass, smoke.py pass, vue-tsc clean, vite build clean.
-- M7 ✅ (Design per docs/design.md): All 7 phases complete. CSS tokens match design spec (dark/light). @fontsource/roboto 400/500/700 self-hosted. All inline SVGs → lucide-vue-next (stroke 1.75, size 20/24). App.vue: logo (red play mark + wordmark), search 640px/40px rounded, sidebar 240/mini 72, user menu, theme (prefers-color-scheme). VideoCard: avatar 36px, Russian meta (formatViews/timeAgo with declension). HomePage: chips row, skeleton matching geometry. WatchPage: 2-col (right 402px), player radius 12, subscribe/like pills, description collapse, underline comment input. ChannelPage: banner 16:5, avatar 128, tabs underline. SearchPage: horizontal rows 360px thumb. UploadPage: centered card 960px, dashed drop zone. Auth: centered 400px card, logo above. SubscriptionsPage: tabs underline, pill buttons. HistoryPage: rows 168x94 + progress, ConfirmDialog. ModerationPage/AdminPage: dense table (row 48, sticky header, outlined pills). PlaylistPage/MyVideosPage: polished rows. Global .btn classes, skeleton shimmer, toast system, ConfirmDialog component. Responsive: 1312 (sidebar mini), 1015 (watch single-col), 792 (sidebar overlay, search overlay, grid 1-col). Zero confirm()/alert() in .vue files. vue-tsc clean, vite build 2.3s.
+- M0–M7 ✅ (see earlier plan or git log).
+- Feature batch ✅ (2026-11-16):
+  - Like/dislike: separate POST/DELETE /api/videos/{id}/like|dislike, like_status: "like"|"dislike"|null, optimistic UI.
+  - Video tags: JSONB column, tag filter on feed, chips row wired on HomePage, tags input on UploadPage.
+  - Custom poster: POST /api/uploads/{id}/poster (image), served by get_poster when set.
+  - Channel: cover_url + description on User, PATCH /api/channels/me, avatar/cover multipart upload.
+  - Comment delete: restricted to moderators only (owner check removed).
+  - Bigger VideoCards: min 320px grid, larger fonts, 12px border-radius.
+  - ChannelEditPage: username edit, avatar + cover upload with preview.
+  - Migration 0003: users.cover_url, users.description, videos.tags, videos.custom_poster_url.
+  - 46 tests pass. Backend + frontend built. vue-tsc clean.
 
-- ⚠ SeaweedFS S3 root returns 403 (no auth) → healthcheck uses `nc -z 8333`. Old CloudServer `s3_data` volume orphaned (harmless).
-- ⚠ Worker image has no bind mount (prod build) — rebuild after backend changes: `docker compose build worker && docker compose up -d worker`.
+- ⚠ SeaweedFS S3 root returns 403 (no auth) → healthcheck uses `nc -z 8333`.
 - ⚠ Clean Ubuntu VM test not done (no VM available on Windows dev machine).
