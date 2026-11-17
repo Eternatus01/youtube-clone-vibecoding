@@ -16,6 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY alembic.ini .
 COPY alembic/ alembic/
 COPY app/ app/
+COPY pytest.ini .
+COPY tests/ tests/
 
 ARG MODE=api
 ENV MODE=$MODE
