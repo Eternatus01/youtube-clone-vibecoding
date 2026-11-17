@@ -1,20 +1,22 @@
-# Database Schema (≤1 page)
+# Схема базы данных
 
-13 tables, PostgreSQL. UUIDs as primary keys, `created_at` with timezone.
+14 таблиц, PostgreSQL. Первичные ключи — UUID строкой; `created_at`/`updated_at`
+с таймзоной (`TIMESTAMPTZ`). Миграции — Alembic (`backend/alembic/versions`).
 
-## Entity-Relationship Diagram
+## Связи
 
 ```mermaid
 erDiagram
     User ||--o{ Video : owns
     User ||--o{ Comment : writes
-    User ||--o{ Like : likes
+    User ||--o{ Like : reacts
     User ||--o{ Subscription : subscribes
-    User ||--o{ Subscription : subscribed_to
     User ||--o{ Playlist : owns
     User ||--o{ Report : files
     User ||--o{ ModerationAction : performs
     User ||--o{ VideoShare : receives
+    User ||--o{ UploadSession : uploads
+    User ||--o{ WatchHistory : watches
     Video ||--o{ VideoAsset : has
     Video ||--o{ Comment : has
     Video ||--o{ Like : has
@@ -22,140 +24,47 @@ erDiagram
     Video ||--o{ Report : reported
     Video ||--o{ ModerationAction : moderated
     Video ||--o{ PlaylistItem : included_in
+    Video ||--o{ UploadSession : from
+    Video ||--o{ Job : processes
+    Video ||--o{ WatchHistory : in
     Playlist ||--o{ PlaylistItem : contains
     Comment ||--o{ Comment : replies_to
-
-    User {
-        uuid id PK
-        string username UK
-        string email UK
-        string password_hash
-        enum role "user|moderator|admin"
-        string avatar_url nullable
-        bool is_active
-        timestamp created_at
-    }
-
-    Video {
-        uuid id PK
-        uuid owner_id FK
-        string title
-        text description nullable
-        enum visibility "public|private|unlisted|hidden"
-        enum status "uploading|processing|ready|failed"
-        bigint views
-        int duration_seconds nullable
-        timestamp created_at
-    }
-
-    VideoAsset {
-        uuid id PK
-        uuid video_id FK
-        string quality "360p|720p|1080p|poster"
-        string key "S3 object key"
-        bigint size_bytes
-        string mime_type
-        int width nullable
-        int height nullable
-    }
-
-    UploadSession {
-        uuid id PK
-        uuid video_id FK "unique"
-        string upload_key "presigned PUT key"
-        timestamp expires_at
-    }
-
-    Job {
-        uuid id PK
-        uuid video_id FK
-        enum job_type "transcode"
-        enum status "pending|running|done|failed"
-        int attempts
-        jsonb meta nullable
-        timestamp created_at
-        timestamp updated_at
-    }
-
-    VideoShare {
-        uuid id PK
-        uuid video_id FK
-        uuid user_id FK
-        timestamp created_at
-    }
-
-    Comment {
-        uuid id PK
-        uuid video_id FK
-        uuid author_id FK
-        uuid parent_id FK nullable
-        text body
-        timestamp created_at
-    }
-
-    Like {
-        uuid id PK
-        uuid video_id FK
-        uuid user_id FK
-        timestamp created_at
-    }
-
-    Subscription {
-        uuid id PK
-        uuid subscriber_id FK
-        uuid subscribed_to_id FK
-        timestamp created_at
-    }
-
-    Playlist {
-        uuid id PK
-        uuid owner_id FK
-        string title
-        text description nullable
-        enum visibility "public|private|unlisted"
-        timestamp created_at
-        timestamp updated_at
-    }
-
-    PlaylistItem {
-        uuid id PK
-        uuid playlist_id FK
-        uuid video_id FK
-        int position
-        timestamp added_at
-    }
-
-    Report {
-        uuid id PK
-        uuid video_id FK
-        uuid reporter_id FK
-        string reason
-        enum status "open|resolved"
-        timestamp created_at
-    }
-
-    ModerationAction {
-        uuid id PK
-        uuid video_id FK
-        uuid moderator_id FK
-        string action "hide|restore|delete"
-        text reason nullable
-        timestamp created_at
-    }
 ```
 
-## Indexes & Constraints
+## Таблицы
 
-- Unique: `(video_id, user_id)` on likes, shares, subscriptions; `(video_id, quality)` on assets.
-- Partial unique: upload session `video_id` where active.
-- Case-insensitive unique on `LOWER(username)` and `LOWER(email)`.
-- Composite index on `(visibility, status)` for feed queries.
-- Fulltext index: `tsvector` on `title || ' ' || description` for search.
+| Таблица | Ключевые поля |
+|---------|---------------|
+| `users` | username (unique), email (unique), password_hash, role (`user/moderator/admin`), avatar_url, cover_url, description, is_active |
+| `videos` | owner_id → users, title, description, visibility (`public/private/unlisted/hidden`), status (`uploading/processing/ready/failed`), views, duration_seconds, tags (JSONB), custom_poster_url |
+| `video_assets` | video_id → videos, quality (`360p/720p/1080p/poster`), object_key (S3), content_type, size_bytes |
+| `upload_sessions` | user_id, video_id (nullable), filename, object_key, size_bytes, content_type, completed |
+| `jobs` | type (`transcode`), status (`pending/running/done/failed`), payload (JSONB: video_id, object_key), attempts, error, locked_by, locked_at |
+| `video_shares` | video_id, user_id — доступ к приватному видео; unique (video_id, user_id) |
+| `comments` | video_id, author_id, parent_id (ответы), body |
+| `likes` | video_id, user_id, is_like (true = лайк, false = дизлайк); unique (video_id, user_id) |
+| `subscriptions` | subscriber_id, channel_id; unique (subscriber_id, channel_id) |
+| `watch_history` | user_id, video_id, progress_seconds, last_watched_at; unique (user_id, video_id) |
+| `playlists` | owner_id, title, description, visibility |
+| `playlist_items` | playlist_id, video_id, position; unique (playlist_id, video_id) |
+| `reports` | video_id, reporter_id, reason, status (`open/resolved/dismissed`); unique (video_id, reporter_id) |
+| `moderation_actions` | video_id, moderator_id, action (`hide/restore`), reason |
 
-## Enums
+## Ограничения и индексы
 
-| Enum | Values |
-|------|--------|
+- Уникальные: username, email; `(video_id, user_id)` для likes, shares, reports;
+  `(subscriber_id, channel_id)`; `(playlist_id, video_id)`;
+  `(user_id, video_id)` для истории.
+- Индекс `ix_watch_history_user_watched (user_id, last_watched_at)` для истории.
+- Каскадные удаления: удаление пользователя/видео чистит зависимые строки
+  (`ON DELETE CASCADE`); `upload_sessions.video_id` — `SET NULL`.
+- Поиск по названию — `ILIKE` с экранированием `%`/`_`; отдельного tsvector-индекса
+  нет.
+
+## Перечисления
+
+| Enum | Значения |
+|------|----------|
 | Role | user, moderator, admin |
 | Visibility | public, private, unlisted, hidden |
 | VideoStatus | uploading, processing, ready, failed |

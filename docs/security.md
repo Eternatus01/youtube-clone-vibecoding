@@ -1,50 +1,57 @@
-# Security Design (≤1 page)
+# Безопасность
 
-## Authentication
+## Аутентификация
 
-- **Password hashing**: argon2id (memory-hard, salt per hash)
-- **Tokens**: JWT access (15 min, HS256) + JWT refresh (30 days, HS256, separate secret)
-- **Transport**: both tokens in httpOnly, SameSite=Lax cookies (no localStorage)
-- **Secure flag**: env-driven (`COOKIE_SECURE`, default false for HTTP dev)
-- **Rate limiting**: login endpoint rate-limited (5 req/s per IP)
-- **Refresh rotation**: refresh via cookie AND request body accepted
+- **Хеширование паролей**: argon2id (memory-hard, соль на хеш).
+- **Токены**: JWT access (15 мин, HS256) + JWT refresh (30 дней, HS256,
+  отдельный секрет).
+- **Транспорт**: оба токена в httpOnly, SameSite=Lax cookies (не localStorage).
+- **Secure**: управляется env (`COOKIE_SECURE`, по умолчанию false для HTTP).
+- **Rate limiting**: логин — 10 попыток за 60 секунд на пару IP+логин.
+- **Refresh**: токен принимается из cookie или тела запроса.
 
-## Authorization
+## Авторизация
 
-- **Server-side enforcement**: every protected endpoint checks ownership or role via FastAPI dependencies
-- **Roles**: user < moderator < admin
-- **Video privacy**:
-  - `public`: anyone can view
-  - `private`: only owner + explicitly shared users
-  - `unlisted`: anyone with the link (no feed/search listing)
-  - `hidden`: moderation-removed, no one can view (return 404)
-- **Media access**: stream/poster endpoints enforce same privacy rules as metadata
-- **Self-guard**: admins cannot deactivate or demote themselves
+- **Проверки на сервере**: каждый защищённый endpoint проверяет владельца или
+  роль через FastAPI-зависимости.
+- **Роли**: user < moderator < admin.
+- **Приватность видео** (одинаково для метаданных, стрима и постера):
+  - `public` — всем;
+  - `private` — владельцу, пользователям из списка доступов и модераторам;
+  - `unlisted` — всем по ссылке, но не в ленте и поиске;
+  - `hidden` — только модераторам и администраторам, остальным 404.
+- **Media**: `/stream` и `/poster` вызывают ту же `ensure_can_view`, что и
+  метаданные; прямой доступ к S3 без подписи невозможен.
+- **Self-guard**: админ не может снять роль или деактивировать себя.
 
-## Storage Security
+## Хранилище
 
-- **SeaweedFS port 8333 not published** — reachable only from internal Docker network
-- **nginx proxy**: `/storage/...` routes to SeaweedFS, stripping the prefix; no direct S3 access
-- **Presigned uploads**: client PUTs to a time-limited presigned URL (signed for `seaweedfs:8333`)
-- **No temp files on API nodes** — uploads go directly to S3
-- **Short-TTL presigned GET** for streaming (minutes, not hours)
+- **Порт SeaweedFS 8333 не публикуется** — только внутренняя сеть Docker.
+- **nginx `/storage/`**: пропускает только GET/HEAD/PUT/OPTIONS к S3; подпись
+  проверяет SeaweedFS. Анонимные список бакета и PUT получают 403.
+- **Presigned uploads**: клиент PUT-ит по URL с ограниченным временем жизни.
+- **Превью/аватары**: presigned GET с TTL 1 час для изображений; сами видео
+  стримятся только через API с проверкой прав.
+- **Без временных файлов на API** — загрузка идёт напрямую в S3.
 
-## Input Validation
+## Валидация ввода
 
-- **Pydantic v2** validates all request bodies, query params, and path params
-- **Upload size limit**: 500 MB max (`UPLOAD_MAX_SIZE`)
-- **Allowed MIME**: video/* only (validated at upload init)
-- **SQL injection**: not possible (SQLAlchemy ORM, no raw SQL string building)
-- **XSS**: no `v-html` with user content; CSP via nginx `X-Content-Type-Options: nosniff`
+- **Pydantic v2** валидирует тела запросов, query- и path-параметры.
+- **Лимит загрузки**: 500 МБ (`UPLOAD_MAX_SIZE`).
+- **MIME**: разрешены video/* (проверка при init) и изображения для превью.
+- **SQL-инъекции**: ORM SQLAlchemy, без склейки SQL-строк; `ILIKE` с
+  экранированием `%` и `_`.
+- **XSS**: нет `v-html` с пользовательским содержимым; nginx отдаёт
+  `X-Content-Type-Options: nosniff`.
 
-## Secrets & Config
+## Секреты и конфиг
 
-- All secrets in `.env` (gitignored)
-- `.env.example` has placeholder values only
-- `install.sh` generates random 32-char hex secrets on first run
-- No hardcoded credentials, API keys, or hostnames
+- Все секреты в `.env` (gitignored).
+- В `.env.example` только плейсхолдеры.
+- `install.sh` генерирует 32-символьные случайные секреты при первом запуске.
+- Нет захардкоженных паролей, API-ключей и хостов.
 
-## Headers (nginx)
+## Заголовки nginx
 
 ```
 X-Content-Type-Options: nosniff
@@ -54,6 +61,6 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 ## Worker
 
-- Jobs dequeued via `SELECT ... FOR UPDATE SKIP LOCKED` — no races
-- Max 3 retry attempts per job, then marked `failed`
-- Worker runs same image as API — no separate attack surface
+- Задачи берутся через `SELECT ... FOR UPDATE SKIP LOCKED` — без гонок.
+- Максимум 3 попытки, затем статус `failed`.
+- Worker — тот же образ, что API, отдельной поверхности атаки нет.

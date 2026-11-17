@@ -1,23 +1,27 @@
 # YouTube Clone
 
-Full-stack video sharing platform: upload, transcode, stream, comment, moderate.
+Полноценная копия YouTube: загрузка и транскодирование видео, лента, плеер,
+лайки, комментарии, каналы, подписки, плейлисты, поиск, приватность,
+модерация и роли. Backend — Python + FastAPI + PostgreSQL, frontend — Vue 3 +
+TypeScript, хранение — S3-совместимый SeaweedFS, развёртывание — одна команда
+на чистой Ubuntu.
 
-## Tech Stack
+## Стек
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic |
-| Database | PostgreSQL 16 |
-| Storage | SeaweedFS (S3-compatible, private network) |
-| Worker | PG queue (FOR UPDATE SKIP LOCKED), ffmpeg transcoding |
-| Frontend | Vue 3, TypeScript, Vite, Pinia, vue-router |
-| Proxy | nginx (routing, static files, storage proxy) |
-| Auth | JWT access (15 min) + refresh (30 days) in httpOnly cookies |
-| Infra | Docker Compose, one-command install |
+| Слой | Технологии |
+|------|------------|
+| Backend | Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic v2 |
+| База данных | PostgreSQL 16 |
+| Хранилище | SeaweedFS (S3 API, внутренняя сеть, порт наружу не публикуется) |
+| Обработка видео | worker на том же образе, очередь в PostgreSQL (`FOR UPDATE SKIP LOCKED`), ffmpeg/ffprobe |
+| Frontend | Vue 3, TypeScript, Vite, Pinia, vue-router, openapi-fetch |
+| Прокси | nginx: статика SPA, `/api`, `/docs`, `/storage` (presigned S3) |
+| Авторизация | JWT access (15 мин) + refresh (30 дней) в httpOnly cookies |
+| Инфраструктура | Docker Compose, `install.sh` для чистой Ubuntu |
 
-## Quick Start
+## Быстрый старт (чистая Ubuntu)
 
-**Prerequisites**: Docker with Compose plugin.
+Нужен только Docker (если его нет — `install.sh` установит сам).
 
 ```bash
 git clone <repo-url> youtube-clone
@@ -25,148 +29,190 @@ cd youtube-clone
 sudo ./install.sh
 ```
 
-Open `http://<server-ip>` in your browser.
+`install.sh` делает всё:
 
-`install.sh` does everything: installs Docker if missing, generates `.env` with random secrets, builds containers, runs migrations, seeds demo data. Safe to re-run.
+1. ставит Docker и Compose plugin, если их нет;
+2. генерирует `.env` со случайными секретами (если файла нет);
+3. собирает образы: backend, worker и nginx с собранным frontend (multi-stage);
+4. поднимает PostgreSQL, SeaweedFS, API, worker, nginx;
+5. прогоняет миграции Alembic и создаёт S3-бакет;
+6. ждёт healthcheck API и проверяет, что SPA отдаётся;
+7. наполняет БД демо-данными: пользователи, 8 видео с реальными MP4 и превью
+   (генерируются ffmpeg), комментарии, лайки, подписки, плейлист, приватный
+   ролик с доступом для другого пользователя, жалоба и скрытое видео.
 
-### Windows Dev
+Повторный запуск безопасен: существующие данные не дублируются.
 
-```bash
-copy .env.example .env
-# Edit passwords/secrets in .env
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
-cd frontend && npm install && npm run dev
-```
+После установки: `http://<ip-сервера>` (порт 80), Swagger — `/docs`.
 
-Frontend dev server: `http://localhost:5173` (proxies API calls to Docker).
+Все порты, кроме nginx:80, остаются внутренними. Работает по HTTP на bare IP:
+флаг `Secure` у cookie управляется переменной `COOKIE_SECURE` (по умолчанию
+`false`).
 
-## Demo Logins
+### Демо-логины
 
-Seeded by `install.sh` (all passwords: `secret123`):
+| Логин | Роль | Что доступно |
+|-------|------|--------------|
+| `admin` | администратор | всё + управление пользователями и ролями |
+| `moderator` | модератор | жалобы, скрытие/восстановление видео, журнал действий |
+| `alice` | пользователь | загрузка, комментарии, подписки, приватные видео |
+| `bob` | пользователь | то же; имеет доступ к приватному видео Alice |
+| `carol` | пользователь | то же |
 
-| Username | Role | Can |
-|----------|------|-----|
-| `admin` | admin | Everything + user management |
-| `moderator` | moderator | Review reports, hide/restore videos |
-| `alice` | user | Upload, comment, subscribe |
-| `bob` | user | Upload, comment, subscribe |
-| `carol` | user | Upload, comment, subscribe |
+Пароль у всех: `secret123`.
 
-## Features
+## Экраны (по ТЗ)
 
-- **Upload**: presigned S3 PUT, real progress, ffmpeg transcode (360p/720p/1080p)
-- **Watch**: HLS streaming, quality selector, view counting
-- **Video privacy**: public / private / unlisted; private video sharing
-- **Interactions**: likes, comments, subscriptions, playlists
-- **Search**: fulltext (PostgreSQL `websearch_to_tsquery`), channel lists
-- **Moderation**: user reports, mod review, hide/restore, action log
-- **Admin**: user list, role management (user/moderator/admin), deactivation
-- **Auth**: register, login, JWT refresh, password change, profile update
-- **API docs**: OpenAPI (Swagger) at `/docs`
+| Экран | Маршрут | Что есть |
+|-------|---------|----------|
+| Главная | `/` | лента с превью, длительностью, каналом, просмотрами |
+| Просмотр | `/watch/:id` | плеер с Range-стримингом, лайк/дизлайк, комментарии, подписка, жалоба, поделиться |
+| Канал | `/channel/:id` | видео и плейлисты автора, подписка, аватар/обложка, редактирование своего канала |
+| Поиск | `/search?q=` | по названию видео и имени канала |
+| Загрузка | `/upload` | выбор файла, drag&drop, реальный прогресс, метаданные, приватность, теги, своё превью |
+| Вход и регистрация | `/login`, `/register` | cookie-сессии, refresh, смена пароля |
+| Модерация | `/moderation` | очередь жалоб, скрытие/восстановление, журнал |
+| Админ | `/admin` | список пользователей, смена ролей, деактивация |
+| Дополнительно | `/my-videos`, `/playlist/:id`, `/history`, `/subscriptions` | свои видео и шаринг, плейлисты, история, подписки |
 
-## Project Structure
+## Как это работает
 
-```
-├── backend/               # FastAPI application
-│   ├── app/
-│   │   ├── core/          # Config, security, DB, S3 client
-│   │   ├── dependencies/  # Auth & permission dependencies
-│   │   ├── models/        # SQLAlchemy models (13 tables)
-│   │   ├── repositories/  # Data access layer
-│   │   ├── routers/       # Route handlers (11 modules)
-│   │   ├── schemas/       # Pydantic request/response models
-│   │   ├── services/      # Business logic
-│   │   ├── worker/        # Job processor (ffmpeg transcoding)
-│   │   └── main.py        # App factory, lifespan, routing
-│   ├── alembic/           # DB migrations
-│   └── tests/             # pytest + httpx (36 tests)
-├── frontend/              # Vue 3 + TypeScript SPA
-│   └── src/
-│       ├── api/           # Generated typed client (openapi-fetch)
-│       ├── components/    # Reusable components
-│       ├── pages/         # Route views (11 pages)
-│       ├── router/        # vue-router config + guards
-│       ├── stores/        # Pinia stores (auth, videos, ...)
-│       └── utils/         # Formatting, date helpers
-├── docker/                # nginx config, SeaweedFS entrypoint
-├── docs/                  # Architecture, DB schema, security, TZ
-├── scripts/               # smoke.py, smoke.mp4, build helpers
-├── docker-compose.yml     # Production compose
-├── docker-compose.dev.yml # Development overrides
-├── install.sh             # One-command Ubuntu installer
-└── .env.example           # Environment variables template
-```
+### Загрузка и хранение (сердце системы)
 
-## Architecture
+1. `POST /api/uploads/init` создаёт запись видео и presigned PUT на
+   `seaweedfs:8333`, возвращая клиенту относительный URL `/storage/...`.
+2. Браузер грузит файл напрямую в S3 через nginx (XHR, реальный прогресс).
+   Подпись проверяет SeaweedFS; без подписи запрос получает 403.
+3. `POST /api/uploads/complete` ставит задачу в очередь PostgreSQL.
+4. Worker забирает задачу, скачивает исходник, проверяет ffprobe, делает
+   rendition (высота = min(исходная, 720p), H.264/AAC, faststart) и превью,
+   загружает их в S3 и помечает видео `ready`.
+5. Ошибки ретраятся 3 раза, затем видео получает статус `failed`.
 
-```
-Browser ──► nginx:80 ──► api:8000 ──► PostgreSQL
-                   │                └─► SeaweedFS (media, S3 API)
-                   └── /storage ──► SeaweedFS (public media proxy)
-    Worker (same image, cron) ──► PostgreSQL + SeaweedFS + ffmpeg
-```
+### Раздача и приватность
 
-See [docs/architecture.md](docs/architecture.md) for full architecture, [docs/db-schema.md](docs/db-schema.md) for database schema, and [docs/security.md](docs/security.md) for security design.
+- `GET /api/videos/{id}/stream` отдаёт видео через API с поддержкой
+  `Range`, `206 Partial Content` и `Accept-Ranges`.
+- `GET /api/videos/{id}/poster` отдаёт превью (`Cache-Control: no-store`).
+- Проверка прав одна и та же для метаданных, стрима и постера:
+  - `public` — всем;
+  - `unlisted` — всем по ссылке, но не в ленте и поиске;
+  - `private` — владельцу, пользователям из списка доступа и модераторам;
+  - `hidden` — только модераторам и администраторам, остальным 404.
+- Владелец выдаёт и отзывает доступ к приватному видео по username в
+  «Мои видео» (`/api/videos/{id}/shares`).
 
-## AI Agents Used
+### Роли
 
-This project was built with OpenCode using a team of specialized AI agents:
+Проверки выполняются на сервере:
 
-| Agent | Model | Role |
-|-------|-------|------|
-| **Lead** | DeepSeek V4 Pro | Architecture, DB schema, API contract, Docker/nginx/install.sh, seed, integration, git, README/docs, TZ compliance |
-| **Backend** | DeepSeek V4 Pro | FastAPI routers, services, repositories, models, Alembic migrations, tests (pytest), worker |
-| **Frontend** | GLM 5.3 Flash | Vue 3 pages, components, Pinia stores, typed API client, router guards, CSS |
+- пользователь — обычные действия и только свои объекты;
+- модератор — очередь жалоб, скрытие/восстановление, журнал;
+- администратор — плюс список пользователей, смена ролей, деактивация;
+- админ не может снять роль или деактивировать себя.
 
-### What Each Agent Built
+### Поиск
 
-**Lead** (DeepSeek V4 Pro):
-- Project scaffolding, Docker Compose, nginx config, install.sh
-- Database schema (13 tables: users, videos, video_assets, upload_sessions, jobs, video_shares, comments, likes, subscriptions, playlists, playlist_items, reports, moderation_actions)
-- Pydantic schemas and route stubs (API contract)
-- S3/SeaweedFS integration, presigned upload flow
-- Seed script, smoke tests, integration verification
-- docs/ (architecture, DB schema, security, plan)
+Поиск по названию видео (`ILIKE`, экранирование `%`/`_`) и по имени канала.
+Приватные, скрытые и необработанные видео в выдачу не попадают.
 
-**Backend** (DeepSeek V4 Pro):
-- Auth system: register, login, JWT access/refresh tokens, password change
-- Upload pipeline: presigned PUT init, upload session tracking, ffmpeg transcode job enqueue
-- Video CRUD with privacy enforcement (public/private/unlisted/hidden)
-- Comments, likes (idempotent), subscriptions, playlists
-- Search (fulltext), channel lists, view counting
-- Moderation: user reports, mod review, video hide/restore, action log
-- Admin: user listing, role management, deactivation with self-guard
-- 36 pytest tests covering auth, uploads, videos, privacy, interactions, worker
-
-**Frontend** (GLM 5.3 Flash):
-- 11 pages: Home (feed), Watch, Upload, Channel, Search, Login, Register, My Videos, Playlist, Moderation, Admin
-- YouTube-style layout: top bar with search, collapsible sidebar, responsive video grid
-- Dark/light theme, skeleton loaders, error/empty states
-- Upload with real progress bar (XHR to presigned URL)
-- Route guards by authentication and role
-- Typed API client generated from `/openapi.json`
-
-## Running Tests
+## Тесты и проверки
 
 ```bash
-# Backend tests (stack must be running)
+# Backend: 46 тестов (auth, uploads, videos, privacy, interactions, worker)
 docker compose exec api pytest -v
 
-# Integration smoke test (privacy + roles matrix)
+# Интеграционный smoke по HTTP: регистрация → загрузка → просмотр →
+# лайк/комментарий + матрица приватности, шаринг, жалобы, роли
 python scripts/smoke.py
+
+# Сборка frontend (vue-tsc + vite)
+cd frontend && npm ci && npm run build
 ```
 
-## Environment Variables
+Smoke-тест сам генерирует MP4 через ffmpeg, поэтому бинарники в репозитории не
+нужны. Для его запуска нужен `httpx` на машине, откуда он запускается.
 
-See `.env.example` for all variables. Key ones:
+## Разработка (Windows/Linux)
 
-- `POSTGRES_USER/PASSWORD/DB` — database credentials
-- `JWT_SECRET`, `REFRESH_SECRET` — token signing keys
-- `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` — SeaweedFS S3 config
-- `COOKIE_SECURE` — set `true` for HTTPS (default `false` for HTTP dev)
-- `CORS_ORIGINS` — comma-separated allowed origins
-- `LOG_LEVEL` — Python logging level (DEBUG/INFO/WARNING)
+```bash
+copy .env.example .env         # Linux: cp .env.example .env
+# отредактировать пароли/секреты
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
-## License
+cd frontend
+npm ci
+npm run dev                    # http://localhost:5173
+```
 
-This is a test assignment project.
+Dev-override публикует API на `:8000` и PostgreSQL на `127.0.0.1:5432`,
+монтирует backend в контейнер. Vite проксирует `/api` в API, `/storage` — в
+nginx. Production-compose без bind mounts: frontend собирается внутри
+nginx-образа.
+
+## Структура репозитория
+
+```
+├── backend/
+│   ├── app/
+│   │   ├── core/          # конфиг, безопасность, БД, S3
+│   │   ├── dependencies/  # текущий пользователь, роли, права
+│   │   ├── models/        # SQLAlchemy-модели (14 таблиц)
+│   │   ├── repositories/  # доступ к данным
+│   │   ├── routers/       # 12 модулей API
+│   │   ├── schemas/       # Pydantic-схемы (контракт API)
+│   │   ├── services/      # бизнес-логика
+│   │   ├── scripts/       # seed демо-данных
+│   │   └── worker/        # обработка очереди, ffmpeg
+│   ├── alembic/           # миграции
+│   └── tests/             # pytest + httpx
+├── frontend/              # Vue 3 + TS SPA (14 страниц)
+├── docker/nginx/          # nginx.conf + multi-stage Dockerfile
+├── docker/seaweedfs/      # entrypoint с S3-конфигом
+├── docs/                  # архитектура, БД, безопасность, план, ТЗ
+│   ├── session/           # исходные диалоги с ИИ
+│   └── agent-setup/       # обвязка ИИ (агенты, правила, скиллы)
+├── scripts/               # smoke.py, storage_verify.py
+├── docker-compose.yml     # production
+├── docker-compose.dev.yml # dev-override
+├── install.sh             # установка одной командой
+└── .env.example
+```
+
+## Документация
+
+- [docs/architecture.md](docs/architecture.md) — архитектура и потоки данных.
+- [docs/db-schema.md](docs/db-schema.md) — схема БД и связи.
+- [docs/security.md](docs/security.md) — модель безопасности.
+- [docs/plan.md](docs/plan.md) — план этапов и текущий статус.
+- [docs/design.md](docs/design.md) — дизайн-система интерфейса.
+- [docs/tz.md](docs/tz.md) — исходное тестовое задание.
+
+## ИИ и агентная обвязка
+
+Проект полностью написан ИИ-агентами в OpenCode. Промпты и диалоги сданы в
+исходном формате инструмента:
+
+- `docs/session/m0.json` … `m7.json`, `bugs-fixed.json` — полные экспорты
+  сессий OpenCode (`info` + `messages`), по файлу на этап работы. Это
+  оригинальные файлы, без пересказов и скриншотов.
+- `.opencode/` — проектная обвязка: конфиг, правила, агенты Lead / Backend /
+  Frontend.
+- `docs/agent-setup/` — глобальные правила, конфиг OpenCode (секреты
+  отредактированы) и скиллы, которые использовались при работе.
+
+Схема работы: Lead ставит задачи и держит архитектуру, контракт API, БД,
+инфраструктуру и git; backend- и frontend-агенты параллельно реализуют
+непересекающиеся части, после чего Lead интегрирует, проверяет и коммитит.
+
+## Ограничения
+
+- Один rendition на видео (до 720p), без HLS/DASH и адаптивного переключения.
+- Поиск по названию через `ILIKE`, без полнотекстового индекса.
+- Приватный доступ выдаётся по username существующего пользователя.
+- Проверка на чистой Ubuntu выполнялась локально в Docker; отдельная VM в
+  процессе разработки была недоступна.
+
+## Лицензия
+
+Тестовое задание, не для продакшена.
