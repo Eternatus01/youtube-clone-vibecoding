@@ -104,23 +104,18 @@ Phases (max 2 parallel per phase):
 - Phase G: Empty/error states, confirm dialogs, responsive pass (1312/1015/792 breakpoints)
 
 ## Status
-- M0–M7 ✅ (see earlier plan or git log).
-- Feature batch ✅ (2026-11-16):
-  - Like/dislike: separate POST/DELETE /api/videos/{id}/like|dislike, like_status: "like"|"dislike"|null, optimistic UI.
-  - Video tags: JSONB column, tag filter on feed, chips row wired on HomePage, tags input on UploadPage.
-  - Custom poster: POST /api/uploads/{id}/poster (image), served by get_poster when set.
-  - Channel: cover_url + description on User, PATCH /api/channels/me, avatar/cover multipart upload.
-  - Comment delete: restricted to moderators only (owner check removed).
-  - Bigger VideoCards: min 320px grid, larger fonts, 12px border-radius.
-  - ChannelEditPage: username edit, avatar + cover upload with preview.
-  - Migration 0003: users.cover_url, users.description, videos.tags, videos.custom_poster_url.
-  - 46 tests pass. Backend + frontend built. vue-tsc clean.
-- Avatar/poster rendering ✅ (2026-11-17):
-  - Channel avatars render as images on VideoCard, WatchPage owner row + comments, ChannelPage, ChannelEditPage (fallback to initial).
-  - Custom video poster: upload on UploadPage (optional), replace in MyVideosPage inline edit.
-  - get_poster sends Cache-Control: no-store; cards/watch/related cache-bust via ?v=custom_poster_url.
-  - Fixed earlier 422 on avatar/cover (FormData field name now `avatar`/`cover`); avatar drawn above banner (z-index).
-  - 15 video+interaction tests pass. vue-tsc clean, vite build ok.
 
-- ⚠ SeaweedFS S3 root returns 403 (no auth) → healthcheck uses `nc -z 8333`.
-- ⚠ Clean Ubuntu VM test not done (no VM available on Windows dev machine).
+Works ✅ (2026-11-17, delivery pass):
+- Prod compose: only nginx:80 published; frontend built by multi-stage nginx image; no bind mounts.
+- `/storage` allows GET/HEAD/PUT/OPTIONS only; anonymous list/root/PUT → 403; nosniff present.
+- Seed renders real MP4 + poster per video via ffmpeg → S3: 8 videos, 16 assets, 0 without media; stream 200 `video/mp4`, poster 200.
+- Private video → 403 on metadata, `/stream`, `/poster` for anonymous; owner and shared user OK.
+- 46 backend tests pass in image; `scripts/smoke.py` covers register → upload → watch → like/comment plus privacy, shares, reports, roles.
+- `/`, `/docs` 200; UI checked: home, watch (readyState 4, duration 5), login, moderation, channel, `/search?q=guitar`.
+- README rewritten in Russian with prompts/`docs/session/` pointers; architecture, DB (14 tables), security docs aligned.
+
+Doesn't work / known issues ⚠:
+- One rendition (≤720p), no HLS; ILIKE search, no FTS; share only to existing username.
+- Clean Ubuntu VM run not performed (tested locally in Docker Desktop); nginx re-resolves upstreams after container recreation.
+
+Next ▶: push repo, export this session to `docs/session/`.
