@@ -1,0 +1,85 @@
+// Global OpenCode config used while building this project.
+// Copied from ~/.config/opencode/opencode.jsonc with credentials redacted.
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "./plugins/caveman",
+    "open-context-mode@latest"
+  ],
+  "providers": {
+    "joingonka": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "JoinGonka (Gonka)",
+      "options": {
+        "baseURL": "https://gate.joingonka.ai/v1"
+      },
+      "models": {
+        "MiniMaxAI/MiniMax-M2.7": {
+          "name": "MiniMax M2.7 (Gonka)",
+          "limit": { "context": 180000, "output": 8192 }
+        },
+        "deepseek-ai/DeepSeek-V4-Flash-0731": {
+          "name": "DeepSeek V4 Flash (Gonka)",
+          "limit": { "context": 380000, "output": 32768 }
+        },
+        "zai-org/GLM-5.3-Flash": {
+          "name": "GLM 5.3 Flash (Gonka)",
+          "limit": { "context": 390000, "output": 8192 }
+        }
+      }
+    },
+    "tooken": {
+      "name": "Tooken Club",
+      "env": ["REDACTED_API_KEY"],
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "https://tooken.club/v1"
+      },
+      "models": {
+        "deepseek-v4.1-flash-1017": {
+          "name": "DeepSeek V4.1 Flash 1017",
+          "limit": { "context": 131072, "output": 16384 }
+        },
+        "deepseek-v4-pro": {
+          "name": "DeepSeek V4 Pro",
+          "limit": { "context": 1000000, "output": 128000 }
+        },
+        "glm-5.3-flash": {
+          "name": "GLM 5.3 Flash",
+          "limit": { "context": 131072, "output": 16384 }
+        },
+        "claude-opus-5-5": {
+          "name": "Claude Opus 5.5",
+          "limit": { "context": 200000, "output": 64000 }
+        }
+      }
+    }
+  },
+  "mcp": {
+    "servers": {
+      "context7": {
+        "type": "remote",
+        "url": "https://mcp.context7.com/mcp",
+        "headers": {
+          "Authorization": "Bearer REDACTED"
+        }
+      },
+      "browse": {
+        "type": "local",
+        "command": ["C:\\Users\\<user>\\.local\\bin\\browse.exe", "mcp"],
+        "cwd": "~",
+        "pool": true,
+        "environment": {
+          "OPENCODE_BROWSER_RUNTIME": "auto-update"
+        }
+      }
+    },
+    "jcodemunch": {
+      "type": "local",
+      "command": ["uvx", "jcodemunch-mcp"],
+      "enabled": true,
+      "timeout": 30000
+    }
+  },
+  "model": "joingonka/deepseek-ai/DeepSeek-V4-Flash-0731"
+}
