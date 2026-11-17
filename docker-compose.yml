@@ -1,16 +1,13 @@
-version: '3.9'
-
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-yt}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-yt}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - '127.0.0.1:5432:5432'
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-yt}']
       interval: 5s
@@ -18,6 +15,7 @@ services:
 
   seaweedfs:
     image: chrislusf/seaweedfs:4.53
+    restart: unless-stopped
     entrypoint: ['/bin/sh', '/etc/seaweedfs/entrypoint.sh']
     environment:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-admin}
@@ -35,6 +33,7 @@ services:
       context: ./backend
       args:
         MODE: api
+    restart: unless-stopped
     env_file: .env
     environment:
       MODE: api
@@ -52,19 +51,30 @@ services:
       ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-15}
       REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-30}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    volumes:
-      - ./backend:/app:ro
     depends_on:
       db:
         condition: service_healthy
       seaweedfs:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health').read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   worker:
     build:
       context: ./backend
       args:
         MODE: worker
+    restart: unless-stopped
     env_file: .env
     environment:
       MODE: worker
@@ -84,15 +94,21 @@ services:
         condition: service_healthy
 
   nginx:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    restart: unless-stopped
     ports:
       - '${NGINX_PORT:-80}:80'
-    volumes:
-      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./frontend/dist:/srv/frontend:ro
     depends_on:
-      - api
-      - seaweedfs
+      api:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q --spider http://127.0.0.1/ || exit 1']
+      interval: 10s
+      retries: 6
 
 volumes:
   pgdata:

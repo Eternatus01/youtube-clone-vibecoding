@@ -12,7 +12,8 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/storage': {
-        target: 'http://localhost:8000',
+        // Presigned S3 uploads go through nginx, not the API.
+        target: 'http://localhost',
         changeOrigin: true,
       },
     },
