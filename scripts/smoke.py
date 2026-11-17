@@ -88,6 +88,17 @@ def main() -> int:
     expect(owner, "GET", vid, 200)
     expect(owner, "GET", stream, 200)
 
+    # --- watch scenario: like + comment, both reflected in reads ---
+    like = owner.post(f"{vid}/like")
+    assert like.status_code == 200, f"like: {like.status_code} {like.text}"
+    assert like.json()["like_status"] == "like", f"like not applied: {like.json()}"
+    comment = owner.post(
+        f"{vid}/comments/", json={"body": f"smoke comment {uniq}"}
+    )
+    assert comment.status_code == 201, f"comment: {comment.status_code} {comment.text}"
+    listed = owner.get(f"{vid}/comments/").json()["items"]
+    assert any(c["body"] == f"smoke comment {uniq}" for c in listed), "comment missing"
+
     # --- share to viewer ---
     share = owner.post(f"{vid}/shares", json={"username": f"smoke_v_{uniq}"})
     assert share.status_code == 201, f"share: {share.status_code} {share.text}"
@@ -118,7 +129,10 @@ def main() -> int:
     expect(viewer, "GET", "/api/admin/users", 403)
     expect(anon, "GET", "/api/admin/users", 401)
 
-    print("✅ M3 smoke PASSED: private matrix, share/unshare, my videos, reports, role checks")
+    print(
+        "✅ smoke PASSED: register → upload → watch → like/comment, "
+        "private matrix, shares, reports, role checks"
+    )
     return 0
 
 

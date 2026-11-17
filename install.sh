@@ -46,6 +46,12 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
+# curl is used by the health checks below; minimal Ubuntu images may lack it.
+if ! command -v curl >/dev/null 2>&1; then
+  apt-get update -y
+  apt-get install -y curl
+fi
+
 # 2. Generate .env with random secrets if missing
 if [ ! -f .env ]; then
   echo "Generating .env with random secrets..."
@@ -86,10 +92,18 @@ if [ "$HEALTHY" -eq 0 ]; then
   exit 1
 fi
 
+# Frontend is baked into the nginx image; verify the SPA shell is served.
+if ! curl -fsS http://localhost/ | grep -q 'id="app"'; then
+  echo "ERROR: frontend is not served. Check logs: docker compose logs nginx"
+  exit 1
+fi
+
 # 5. Seed demo data (idempotent)
 echo "Seeding demo data..."
 docker compose exec -T api python -m app.main seed || {
-  echo "WARNING: seed failed (non-fatal). Check logs: docker compose logs api"
+  echo "ERROR: seed failed. The site is up, but demo data is missing."
+  echo "Re-run after fixing the error: sudo ./install.sh"
+  exit 1
 }
 
 # Detect server IP
